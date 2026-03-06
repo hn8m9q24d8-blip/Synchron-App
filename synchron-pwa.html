@@ -371,7 +371,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
-      <button type="button" onclick="runCalendarSync()" style="background:#e8f4fd;border:1.5px solid #b3d7f0;border-radius:10px;padding:8px 14px;cursor:pointer;touch-action:manipulation;color:#1a6ea8;font-weight:800;font-size:13px;-webkit-appearance:none;outline:none;min-height:36px">🔄 Sync</button>
       <div class="icon-btn" onclick="openTerminSheet()">
         <svg width="14" height="14" fill="none" viewBox="0 0 14 14"><path d="M7 1v12M1 7h12" stroke="#8a7560" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
@@ -655,20 +654,20 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   <div style="padding:10px 12px 8px;flex-shrink:0;background:#f9f9f9;border-bottom:2px solid #fce7f3">
     <div style="font-size:10px;font-weight:800;color:#999;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">📥 Monatsimport</div>
     <div style="display:flex;gap:8px">
-      <!-- iCal Import -->
-      <input id="ics-import-input" type="file" accept=".ics" style="display:none" onchange="icsImport(this)">
-      <button type="button" onclick="document.getElementById('ics-import-input').click()" style="flex:1;background:linear-gradient(135deg,#0f4c8a,#1a6ea8);border:none;border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 8px rgba(26,110,168,.3)">
-        <div style="font-size:22px">📅</div>
-        <div style="font-size:11px;font-weight:800;color:#fff">iCal importieren</div>
-        <div style="font-size:9px;color:rgba(255,255,255,.65)">.ics aus Kalender-App</div>
-      </button>
       <!-- Belege & Dispos -->
       <input id="dok-upload-input" type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="dokGotFiles(this)">
       <input id="dok-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
+      <input id="ics-import-input" type="file" accept=".ics" style="display:none" onchange="icsImport(this)">
       <button type="button" onclick="document.getElementById('dok-folder-input').click()" style="flex:1;background:linear-gradient(135deg,#7e22ce,#9333ea);border:none;border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 8px rgba(147,51,234,.3)">
         <div style="font-size:22px">📂</div>
         <div style="font-size:11px;font-weight:800;color:#fff">Belege importieren</div>
         <div style="font-size:9px;color:rgba(255,255,255,.65)">Dispos · Abrechnungen · Fotos</div>
+      </button>
+      <!-- Kalender Sync -->
+      <button type="button" onclick="runCalendarSync()" style="flex:1;background:linear-gradient(135deg,#0f6a4c,#15803d);border:none;border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 8px rgba(21,128,61,.3)">
+        <div style="font-size:22px">🔄</div>
+        <div style="font-size:11px;font-weight:800;color:#fff">Kalender Sync</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.65)">Neue Termine holen</div>
       </button>
       <!-- Alle KI analysieren -->
       <button type="button" onclick="dokRefreshAll()" style="flex:1;background:linear-gradient(135deg,#9d174d,#be185d);border:none;border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 8px rgba(190,24,93,.3)">
