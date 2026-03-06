@@ -368,6 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-06 17:00</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -2826,24 +2827,18 @@ var ICAL_URL='https://p45-caldav.icloud.com/published/2/NDAxMzc4NjI5NDAxMzc4Nks6
 function runCalendarSync(){
   showToast('⏳ Lade Kalender…');
   var httpsUrl=ICAL_URL.replace('webcal://','https://');
-  var proxies=[
-    'https://corsproxy.io/?'+encodeURIComponent(httpsUrl),
-    'https://api.allorigins.win/raw?url='+encodeURIComponent(httpsUrl),
-    'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(httpsUrl)
-  ];
-  function tryProxy(i){
-    if(i>=proxies.length){ _finishSync(_localCal(),'lokal (offline)'); return; }
-    fetch(proxies[i])
-      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
-      .then(function(txt){
-        if(txt.indexOf('VCALENDAR')<0) throw new Error('kein iCal');
-        var events=icsParse(txt);
-        if(!events.length) throw new Error('keine Events');
-        _finishSync(events,'iCloud');
-      })
-      .catch(function(){ tryProxy(i+1); });
-  }
-  tryProxy(0);
+  fetch(httpsUrl, {mode:'cors'})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(function(txt){
+      if(txt.indexOf('VCALENDAR')<0) throw new Error('kein iCal');
+      var events=icsParse(txt);
+      if(!events.length) throw new Error('keine Events');
+      _finishSync(events,'iCloud');
+    })
+    .catch(function(err){
+      console.warn('Direkt-Fetch fehlgeschlagen:',err);
+      _finishSync(_localCal(),'lokal');
+    });
 }
 
 function _localCal(){
