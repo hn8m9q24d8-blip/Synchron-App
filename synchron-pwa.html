@@ -371,7 +371,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
-      <button type="button" onclick="runCalendarSync()" title="Kalender synchronisieren" style="background:#e8f4fd;border:1.5px solid #b3d7f0;border-radius:10px;padding:7px 12px;cursor:pointer;touch-action:manipulation;color:#1a6ea8;font-weight:700;font-size:13px">🔄 Sync</button>
+      <button type="button" onclick="runCalendarSync()" style="background:#e8f4fd;border:1.5px solid #b3d7f0;border-radius:10px;padding:8px 14px;cursor:pointer;touch-action:manipulation;color:#1a6ea8;font-weight:800;font-size:13px;-webkit-appearance:none;outline:none;min-height:36px">🔄 Sync</button>
       <div class="icon-btn" onclick="openTerminSheet()">
         <svg width="14" height="14" fill="none" viewBox="0 0 14 14"><path d="M7 1v12M1 7h12" stroke="#8a7560" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
@@ -2838,7 +2838,9 @@ function runCalendarSync(){
   if(results)results.innerHTML='<div style="text-align:center;padding:40px 0;color:#999;font-size:13px">⏳ Verbinde mit iCloud…</div>';
 
   // iCloud öffentlichen Kalender abrufen
-  fetch(ICAL_URL)
+  var httpsUrl=ICAL_URL.replace('webcal://','https://');
+  var proxyUrl='https://api.allorigins.win/raw?url='+encodeURIComponent(httpsUrl);
+  fetch(proxyUrl)
     .then(function(r){
       if(!r.ok) throw new Error('HTTP '+r.status);
       return r.text();
