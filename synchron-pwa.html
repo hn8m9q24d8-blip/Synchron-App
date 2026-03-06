@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-06 17:00</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-06 10:38</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -647,7 +647,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div style="display:flex;gap:8px;align-items:center">
       <input id="dok-upload-input" type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="dokGotFiles(this)">
       <input id="dok-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
-      <input id="ics-import-input" type="file" accept=".ics" style="display:none" onchange="icsImport(this)">
+      <input id="ics-import-input" type="file" accept="*/*" style="display:none" onchange="icsImport(this)">
       <button type="button" onclick="dokRefreshAll()" style="background:#be185d;color:#fff;font-size:12px;font-weight:700;padding:7px 10px;border-radius:8px;cursor:pointer;border:none;touch-action:manipulation">🔍 Alle</button>
     </div>
   </div>
@@ -656,6 +656,12 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
   <div style="padding:10px 12px 8px;flex-shrink:0;background:var(--cream);border-bottom:2px solid var(--border)">
     <div style="font-size:10px;font-weight:800;color:var(--ink4);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">📥 Monatsimport</div>
     <div style="display:flex;gap:8px">
+      <!-- iCal Import -->
+      <button type="button" onclick="icsImportFromClipboard()" style="flex:1;background:var(--cream2);border:2px solid var(--border);border-radius:12px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 0 var(--border)">
+        <div style="font-size:22px">📅</div>
+        <div style="font-size:11px;font-weight:800;color:var(--ink)">iCal Import</div>
+        <div style="font-size:9px;color:var(--ink4)">.ics oder Ablage</div>
+      </button>
       <!-- Kalender Sync -->
       <button type="button" onclick="runCalendarSync()" style="flex:1;background:var(--cream2);border:2px solid var(--border);border-radius:12px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 0 var(--border)">
         <div style="font-size:22px">🔄</div>
@@ -2676,42 +2682,56 @@ function autoMatchPay(){
 // ══════════════════════════════════════════════════
 // ICS IMPORT — liest .ics-Datei aus iPhone Kalender
 // ══════════════════════════════════════════════════
+function icsImportFromClipboard(){
+  if(!navigator.clipboard||!navigator.clipboard.readText){
+    document.getElementById('ics-import-input').click();
+    return;
+  }
+  navigator.clipboard.readText().then(function(txt){
+    if(txt&&txt.indexOf('VCALENDAR')>=0){
+      var events=icsParse(txt);
+      if(events.length){
+        _processIcsEvents(events);
+        return;
+      }
+    }
+    // Kein ICS in Zwischenablage — Datei-Picker öffnen
+    document.getElementById('ics-import-input').click();
+  }).catch(function(){
+    document.getElementById('ics-import-input').click();
+  });
+}
+
 function icsImport(inp){
   var file=inp.files[0];
   if(!file){return;}
   inp.value='';
   var reader=new FileReader();
   reader.onload=function(e){
-    var text=e.target.result;
-    var events=icsParse(text);
-    if(!events.length){
-      showToast('Keine Termine in der .ics-Datei gefunden');
-      return;
-    }
-    // Duplikat-Check
-    var importedIds=new Set((db.termine||[]).map(function(t){return t.calEventId;}).filter(Boolean));
-    var importedKeys=new Set((db.termine||[]).map(function(t){return (t.datum||'')+'|'+(t.studio||'').toLowerCase();}));
-    var neu=events.filter(function(ev){
-      if(ev.calEventId&&importedIds.has(ev.calEventId)) return false;
-      var key=(ev.datum||'')+'|'+(ev.studio||'').toLowerCase();
-      if(importedKeys.has(key)) return false;
-      return true;
-    });
-    if(!neu.length){
-      var st=document.getElementById('ics-import-status');
-      if(st){st.style.display='block';st.textContent='✓ Alles aktuell – '+events.length+' Termine bereits importiert';}
-      showToast('✓ Alle Termine bereits vorhanden');
-      return;
-    }
-    // Neue Termine als Kandidaten in Sync-View zeigen
-    syncCandidates=neu;
-    injectSyncCandidates(neu);
-    switchView('sync');
-    var st=document.getElementById('ics-import-status');
-    if(st){st.style.display='block';st.textContent='✓ '+neu.length+' neue Termine gefunden – bitte prüfen';}
-    showToast('📅 '+neu.length+' neue Termine aus iCal');
+    var events=icsParse(e.target.result);
+    _processIcsEvents(events);
   };
   reader.readAsText(file,'UTF-8');
+}
+
+function _processIcsEvents(events){
+  if(!events.length){ showToast('Keine Termine gefunden'); return; }
+  var cutoff=new Date(); cutoff.setDate(cutoff.getDate()-30);
+  var cutoffStr=cutoff.toISOString().slice(0,10);
+  events=events.filter(function(ev){ return ev.datum>=cutoffStr; });
+  var importedIds=new Set((db.termine||[]).map(function(t){return t.calEventId;}).filter(Boolean));
+  var importedKeys=new Set((db.termine||[]).map(function(t){return (t.datum||'')+'|'+(t.studio||'').toLowerCase();}));
+  var neu=events.filter(function(ev){
+    if(ev.calEventId&&importedIds.has(ev.calEventId)) return false;
+    var key=(ev.datum||'')+'|'+(ev.studio||'').toLowerCase();
+    if(importedKeys.has(key)) return false;
+    return true;
+  });
+  if(!neu.length){ showToast('✓ Alles aktuell – keine neuen Termine'); return; }
+  syncCandidates=neu;
+  injectSyncCandidates(neu);
+  switchView('sync');
+  showToast('📅 '+neu.length+' neue Termine gefunden');
 }
 
 function icsParse(text){
@@ -2826,19 +2846,37 @@ var ICAL_URL='https://p45-caldav.icloud.com/published/2/NDAxMzc4NjI5NDAxMzc4Nks6
 
 function runCalendarSync(){
   showToast('⏳ Lade Kalender…');
-  var httpsUrl=ICAL_URL.replace('webcal://','https://');
-  fetch(httpsUrl, {mode:'cors'})
-    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
-    .then(function(txt){
-      if(txt.indexOf('VCALENDAR')<0) throw new Error('kein iCal');
-      var events=icsParse(txt);
-      if(!events.length) throw new Error('keine Events');
-      _finishSync(events,'iCloud');
+  var key=(db.profil||{}).apiKey;
+  if(!key){ _finishSync(_localCal(),'lokal (kein API-Key)'); return; }
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:'claude-haiku-4-5-20251001',
+      max_tokens:16000,
+      tools:[{"type":"web_search_20250305","name":"web_search"}],
+      messages:[{role:'user',content:'Fetch this exact URL and return ONLY the raw ICS file content, nothing else, no explanation, no markdown: '+ICAL_URL}]
     })
-    .catch(function(err){
-      console.warn('Direkt-Fetch fehlgeschlagen:',err);
-      _finishSync(_localCal(),'lokal');
-    });
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var txt=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    // ICS-Block extrahieren
+    var start=txt.indexOf('BEGIN:VCALENDAR');
+    var end=txt.lastIndexOf('END:VCALENDAR');
+    if(start>=0&&end>=0){
+      var ics=txt.slice(start,end+13);
+      var events=icsParse(ics);
+      if(events.length){ _finishSync(events,'iCloud'); return; }
+    }
+    _finishSync(_localCal(),'lokal');
+  })
+  .catch(function(){ _finishSync(_localCal(),'lokal'); });
 }
 
 function _localCal(){
