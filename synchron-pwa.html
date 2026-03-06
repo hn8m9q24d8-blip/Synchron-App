@@ -2824,59 +2824,81 @@ function initSyncView(){
   }
 }
 
+var ICAL_URL='https://p45-caldav.icloud.com/published/2/NDAxMzc4NjI5NDAxMzc4Nks6cwUMI-YUhy4sVFJ6ly6h6szK7ZHzl82mMhlbKftLb4R8T9a4LHkpulOKr84WH0r_0DT7-em7uwdJxDeMCOQ';
+
 function runCalendarSync(){
   var btn=document.getElementById('sync-main-btn');
   var lbl=document.getElementById('sync-btn-label');
   var last=document.getElementById('sync-last');
   var results=document.getElementById('sync-results');
   var fromCalendar=!btn;
-  if(fromCalendar) showToast('⏳ Synchronisiere…');
-  if(lbl)lbl.textContent='Synchronisiere…';
+  if(fromCalendar) showToast('⏳ Lade Kalender…');
+  if(lbl)lbl.textContent='Lade Kalender…';
   if(btn){btn.style.opacity='0.7';btn.style.pointerEvents='none';}
-  if(results)results.innerHTML='';
-  setTimeout(function(){
-    // Bereits importierte CalEventIds
-    var importedIds=new Set((db.termine||[]).map(function(t){return t.calEventId;}).filter(Boolean));
-    // Zusätzlich: Datum+Studio-Kombination um Duplikate ohne calEventId zu vermeiden
-    var importedKeys=new Set((db.termine||[]).map(function(t){return (t.datum||'')+'|'+(t.studio||'').toLowerCase();}));
+  if(results)results.innerHTML='<div style="text-align:center;padding:40px 0;color:#999;font-size:13px">⏳ Verbinde mit iCloud…</div>';
 
-    // Dynamisch alle vorhandenen KALENDER_XXXX-Arrays sammeln
-    var thisYear=new Date().getFullYear();
-    var calJahre=[];
-    var cal=[];
-    for(var y=2025;y<=thisYear+1;y++){
-      var arr=window['KALENDER_'+y];
-      if(arr&&arr.length){calJahre.push(y);cal=cal.concat(arr);}
-    }
-    var jahreLabel=calJahre.length===1?String(calJahre[0]):calJahre[0]+'–'+calJahre[calJahre.length-1];
-    var sub=document.getElementById('sync-sub');
-    if(sub)sub.textContent='Synchrontermine '+jahreLabel;
-
-    var neu=cal.filter(function(t){
-      // Schon per ID importiert?
-      if(t.calEventId&&importedIds.has(t.calEventId)) return false;
-      // Schon per Datum+Studio vorhanden?
-      var key=(t.datum||'')+'|'+(t.studio||'').toLowerCase();
-      if(importedKeys.has(key)) return false;
-      return true;
+  // iCloud öffentlichen Kalender abrufen
+  fetch(ICAL_URL)
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.text();
+    })
+    .then(function(icsText){
+      _processSyncICS(icsText, fromCalendar, btn, lbl, last, results);
+    })
+    .catch(function(err){
+      // CORS-Fallback: lokale KALENDER_XXXX-Arrays nutzen
+      console.warn('iCloud fetch fehlgeschlagen, nutze lokale Daten:', err);
+      _processSyncLocal(fromCalendar, btn, lbl, last, results);
     });
-    var bereits=cal.length-neu.length;
-    if(lbl)lbl.textContent='Kalender synchronisieren';
-    if(btn)btn.style.opacity='';
-    if(btn)btn.style.pointerEvents='';
-    var now=new Date();
-    var timeStr=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-    if(last)last.textContent='Zuletzt: heute '+timeStr+' · '+cal.length+' Termine ('+jahreLabel+')';
-    if(!neu.length){
-      if(fromCalendar) showToast('✓ Alles aktuell – '+bereits+' Termine bereits importiert');
-      if(results)results.innerHTML='<div class="empty-state" style="padding:40px 0"><div class="empty-icon" style="font-size:40px">✓</div><div class="empty-title">Alles aktuell!</div><div class="empty-sub">'+bereits+' Termine bereits importiert.</div></div>';
-      return;
-    }
-    if(fromCalendar) showToast('✓ '+neu.length+' neue Termine – bitte in Sync-View prüfen');
-    syncCandidates=neu;
-    syncCurrentIdx=0;
-    injectSyncCandidates(neu);
-  },600);
+}
+
+function _processSyncICS(icsText, fromCalendar, btn, lbl, last, results){
+  var events=icsParse(icsText);
+  _finishSync(events, 'iCloud', fromCalendar, btn, lbl, last, results);
+}
+
+function _processSyncLocal(fromCalendar, btn, lbl, last, results){
+  var thisYear=new Date().getFullYear();
+  var cal=[];
+  for(var y=2025;y<=thisYear+1;y++){
+    var arr=window['KALENDER_'+y];
+    if(arr&&arr.length) cal=cal.concat(arr);
+  }
+  _finishSync(cal, 'lokal', fromCalendar, btn, lbl, last, results);
+}
+
+function _finishSync(cal, quelle, fromCalendar, btn, lbl, last, results){
+  if(lbl)lbl.textContent='Kalender synchronisieren';
+  if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
+
+  var importedIds=new Set((db.termine||[]).map(function(t){return t.calEventId;}).filter(Boolean));
+  var importedKeys=new Set((db.termine||[]).map(function(t){return (t.datum||'')+'|'+(t.studio||'').toLowerCase();}));
+
+  var neu=cal.filter(function(t){
+    if(t.calEventId&&importedIds.has(t.calEventId)) return false;
+    var key=(t.datum||'')+'|'+(t.studio||'').toLowerCase();
+    if(importedKeys.has(key)) return false;
+    return true;
+  });
+  var bereits=cal.length-neu.length;
+
+  var now=new Date();
+  var timeStr=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  if(last)last.textContent='Zuletzt: heute '+timeStr+' · '+cal.length+' Termine ('+quelle+')';
+  var sub=document.getElementById('sync-sub');
+  if(sub)sub.textContent='Quelle: '+quelle;
+
+  if(!neu.length){
+    if(fromCalendar) showToast('✓ Alles aktuell – '+bereits+' Termine vorhanden');
+    if(results)results.innerHTML='<div class="empty-state" style="padding:40px 0"><div class="empty-icon" style="font-size:40px">✓</div><div class="empty-title">Alles aktuell!</div><div class="empty-sub">'+bereits+' Termine bereits importiert.</div></div>';
+    return;
+  }
+  if(fromCalendar) showToast('✓ '+neu.length+' neue Termine gefunden');
+  syncCandidates=neu;
+  syncCurrentIdx=0;
+  injectSyncCandidates(neu);
+  if(fromCalendar) switchView('sync');
 }
 
 function injectSyncCandidates(list){
