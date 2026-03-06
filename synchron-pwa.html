@@ -2824,14 +2824,33 @@ function initSyncView(){
 var ICAL_URL='https://p45-caldav.icloud.com/published/2/NDAxMzc4NjI5NDAxMzc4Nks6cwUMI-YUhy4sVFJ6ly6h6szK7ZHzl82mMhlbKftLb4R8T9a4LHkpulOKr84WH0r_0DT7-em7uwdJxDeMCOQ';
 
 function runCalendarSync(){
-  showToast('🔄 Sync gestartet…');
-  var importedIds=new Set((db.termine||[]).map(function(t){return t.calEventId;}).filter(Boolean));
-  var importedKeys=new Set((db.termine||[]).map(function(t){return (t.datum||'')+'|'+(t.studio||'').toLowerCase();}));
+  showToast('⏳ Lade Kalender…');
+  var httpsUrl=ICAL_URL.replace('webcal://','https://');
+  var proxyUrl='https://api.allorigins.win/raw?url='+encodeURIComponent(httpsUrl);
+  fetch(proxyUrl)
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(function(icsText){
+      var events=icsParse(icsText);
+      if(events.length) _finishSync(events,'iCloud');
+      else _finishSync(_localCal(),'lokal');
+    })
+    .catch(function(){
+      _finishSync(_localCal(),'lokal');
+    });
+}
+
+function _localCal(){
   var cal=[];
   for(var y=2025;y<=2027;y++){
     var arr=window['KALENDER_'+y];
     if(arr&&arr.length) cal=cal.concat(arr);
   }
+  return cal;
+}
+
+function _finishSync(cal,quelle){
+  var importedIds=new Set((db.termine||[]).map(function(t){return t.calEventId;}).filter(Boolean));
+  var importedKeys=new Set((db.termine||[]).map(function(t){return (t.datum||'')+'|'+(t.studio||'').toLowerCase();}));
   var neu=cal.filter(function(t){
     if(t.calEventId&&importedIds.has(t.calEventId)) return false;
     var key=(t.datum||'')+'|'+(t.studio||'').toLowerCase();
@@ -2839,14 +2858,16 @@ function runCalendarSync(){
     return true;
   });
   if(!neu.length){
-    showToast('✓ Alles aktuell – '+cal.length+' Termine bereits drin');
+    showToast('✓ Alles aktuell ('+quelle+') – '+cal.length+' Termine');
+    var results=document.getElementById('sync-results');
+    if(results)results.innerHTML='<div class="empty-state" style="padding:40px 0"><div class="empty-icon" style="font-size:40px">✓</div><div class="empty-title">Alles aktuell!</div><div class="empty-sub">'+cal.length+' Termine bereits importiert.</div></div>';
     return;
   }
   syncCandidates=neu;
   syncCurrentIdx=0;
   injectSyncCandidates(neu);
   switchView('sync');
-  showToast('✓ '+neu.length+' neue Termine gefunden');
+  showToast('✓ '+neu.length+' neue Termine ('+quelle+')');
 }
 
 function _processSyncICS(icsText, fromCalendar, btn, lbl, last, results){
