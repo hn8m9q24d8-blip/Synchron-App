@@ -658,16 +658,17 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <input id="dok-upload-input" type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="dokGotFiles(this)">
       <input id="dok-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
       <input id="ics-import-input" type="file" accept=".ics" style="display:none" onchange="icsImport(this)">
-      <button type="button" onclick="document.getElementById('dok-folder-input').click()" style="flex:1;background:linear-gradient(135deg,#7e22ce,#9333ea);border:none;border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 8px rgba(147,51,234,.3)">
-        <div style="font-size:22px">📂</div>
-        <div style="font-size:11px;font-weight:800;color:#fff">Belege importieren</div>
-        <div style="font-size:9px;color:rgba(255,255,255,.65)">Dispos · Abrechnungen · Fotos</div>
-      </button>
       <!-- Kalender Sync -->
       <button type="button" onclick="runCalendarSync()" style="flex:1;background:linear-gradient(135deg,#0f6a4c,#15803d);border:none;border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 8px rgba(21,128,61,.3)">
         <div style="font-size:22px">🔄</div>
         <div style="font-size:11px;font-weight:800;color:#fff">Kalender Sync</div>
         <div style="font-size:9px;color:rgba(255,255,255,.65)">Neue Termine holen</div>
+      </button>
+      <!-- Belege & Dispos -->
+      <button type="button" onclick="document.getElementById('dok-folder-input').click()" style="flex:1;background:linear-gradient(135deg,#7e22ce,#9333ea);border:none;border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 8px rgba(147,51,234,.3)">
+        <div style="font-size:22px">📂</div>
+        <div style="font-size:11px;font-weight:800;color:#fff">Belege importieren</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.65)">Dispos · Abrechnungen · Fotos</div>
       </button>
       <!-- Alle KI analysieren -->
       <button type="button" onclick="dokRefreshAll()" style="flex:1;background:linear-gradient(135deg,#9d174d,#be185d);border:none;border-radius:12px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 8px rgba(190,24,93,.3)">
@@ -7221,7 +7222,7 @@ function suchHL(text,q){
   </div>
   </div><!-- end scroll wrapper -->
   <!-- STATISCHE FOOTER-BUTTONS -->
-  <div id="dok-footer-analyse" style="display:block;padding:8px 16px 4px;background:#fff;border-top:1px solid #f0f0f0;flex-shrink:0">
+  <div id="dok-footer-analyse" style="display:none;padding:8px 16px 4px;background:#fff;border-top:1px solid #f0f0f0;flex-shrink:0">
     <div style="display:flex;gap:8px">
       <button type="button" id="dok-detail-analyse-btn" onclick="dokAnalyseOne()" style="flex:1;background:#be185d;color:#fff;padding:11px;border-radius:10px;text-align:center;font-weight:700;font-size:13px;cursor:pointer;border:none;touch-action:manipulation">🔍 KI analysieren</button>
       <button type="button" onclick="dokDeleteOne()" style="background:#fff0f6;border:1.5px solid #fbcfe8;color:#be185d;padding:11px 14px;border-radius:10px;font-weight:700;cursor:pointer;border:1.5px solid #fbcfe8;touch-action:manipulation">🗑</button>
