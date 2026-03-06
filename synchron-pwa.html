@@ -2824,32 +2824,29 @@ function initSyncView(){
 var ICAL_URL='https://p45-caldav.icloud.com/published/2/NDAxMzc4NjI5NDAxMzc4Nks6cwUMI-YUhy4sVFJ6ly6h6szK7ZHzl82mMhlbKftLb4R8T9a4LHkpulOKr84WH0r_0DT7-em7uwdJxDeMCOQ';
 
 function runCalendarSync(){
-  var btn=document.getElementById('sync-main-btn');
-  var lbl=document.getElementById('sync-btn-label');
-  var last=document.getElementById('sync-last');
-  var results=document.getElementById('sync-results');
-  var fromCalendar=!btn;
-  if(fromCalendar) showToast('⏳ Lade Kalender…');
-  if(lbl)lbl.textContent='Lade Kalender…';
-  if(btn){btn.style.opacity='0.7';btn.style.pointerEvents='none';}
-  if(results)results.innerHTML='<div style="text-align:center;padding:40px 0;color:#999;font-size:13px">⏳ Verbinde mit iCloud…</div>';
-
-  // iCloud öffentlichen Kalender abrufen
-  var httpsUrl=ICAL_URL.replace('webcal://','https://');
-  var proxyUrl='https://api.allorigins.win/raw?url='+encodeURIComponent(httpsUrl);
-  fetch(proxyUrl)
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      return r.text();
-    })
-    .then(function(icsText){
-      _processSyncICS(icsText, fromCalendar, btn, lbl, last, results);
-    })
-    .catch(function(err){
-      // CORS-Fallback: lokale KALENDER_XXXX-Arrays nutzen
-      console.warn('iCloud fetch fehlgeschlagen, nutze lokale Daten:', err);
-      _processSyncLocal(fromCalendar, btn, lbl, last, results);
-    });
+  showToast('🔄 Sync gestartet…');
+  var importedIds=new Set((db.termine||[]).map(function(t){return t.calEventId;}).filter(Boolean));
+  var importedKeys=new Set((db.termine||[]).map(function(t){return (t.datum||'')+'|'+(t.studio||'').toLowerCase();}));
+  var cal=[];
+  for(var y=2025;y<=2027;y++){
+    var arr=window['KALENDER_'+y];
+    if(arr&&arr.length) cal=cal.concat(arr);
+  }
+  var neu=cal.filter(function(t){
+    if(t.calEventId&&importedIds.has(t.calEventId)) return false;
+    var key=(t.datum||'')+'|'+(t.studio||'').toLowerCase();
+    if(importedKeys.has(key)) return false;
+    return true;
+  });
+  if(!neu.length){
+    showToast('✓ Alles aktuell – '+cal.length+' Termine bereits drin');
+    return;
+  }
+  syncCandidates=neu;
+  syncCurrentIdx=0;
+  injectSyncCandidates(neu);
+  switchView('sync');
+  showToast('✓ '+neu.length+' neue Termine gefunden');
 }
 
 function _processSyncICS(icsText, fromCalendar, btn, lbl, last, results){
