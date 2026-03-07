@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 09:05</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 09:35</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -4744,13 +4744,9 @@ function dokOpenDetail(id){
   var awaitConfirm = !notAnalysed && (!!d.dataURL || !!d._editMode);
   var confirmed   = !notAnalysed && !d.dataURL && !d._editMode;
 
-  // Analyse-Button zurücksetzen (label je nach State)
+  // KI-Button zurücksetzen
   var analyseBtn=document.getElementById('dok-detail-analyse-btn');
-  if(analyseBtn){
-    analyseBtn.textContent=confirmed?'✏ Daten bearbeiten':'🔍 KI analysieren';
-    analyseBtn.style.opacity='1';
-    analyseBtn.style.pointerEvents='';
-  }
+  if(analyseBtn){ analyseBtn.textContent='🔍 KI analysieren'; analyseBtn.style.opacity='1'; analyseBtn.style.pointerEvents=''; }
 
   // Title
   document.getElementById('dok-detail-title').textContent=d.beschr||d.dateiname||'Dokument';
@@ -4779,20 +4775,19 @@ function dokOpenDetail(id){
 
   // ── STATE: NICHT ANALYSIERT ──────────────────────────────
   if(notAnalysed){
-    body+='<div style="background:#f5f5f5;border-radius:12px;padding:16px;text-align:center;margin-bottom:12px">'
-      +'<div style="font-size:32px;margin-bottom:8px">📎</div>'
-      +'<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+esc(d.dateiname||'Dokument')+'</div>'
-      +'<div style="font-size:12px;color:#888">Noch nicht analysiert – unten auf KI analysieren tippen</div>'
+    // Foto (wird oben im #dok-detail-img gezeigt)
+    body+='<div style="background:#f5f5f5;border-radius:12px;padding:14px;text-align:center;margin-bottom:14px">'
+      +'<div style="font-size:12px;color:#888;margin-bottom:12px">Tippe auf KI-Analyse, um alle Daten auszulesen</div>'
+      +'<button type="button" onclick="dokAnalyseOne()" style="width:100%;background:#1a6ea8;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:16px;cursor:pointer;touch-action:manipulation">🔍 KI-Analyse starten</button>'
       +'</div>';
-    if(d.mime==='application/pdf') body+='<div style="text-align:center;padding:12px;background:#f5f5f5;border-radius:8px;color:#555;font-size:13px;margin-bottom:12px">📄 '+esc(d.dateiname||'PDF')+'</div>';
+    if(d.mime==='application/pdf') body+='<div style="text-align:center;padding:10px;background:#f5f5f5;border-radius:8px;color:#555;font-size:13px;margin-bottom:12px">📄 '+esc(d.dateiname||'PDF')+'</div>';
 
   // ── STATE: WARTET AUF BESTÄTIGUNG ────────────────────────
   } else if(awaitConfirm){
-    body+='<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:12px 14px;margin-bottom:12px">'
-      +'<div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⚠ KI-Ergebnis prüfen & bestätigen</div>'
-      +'<div style="font-size:12px;color:#555;margin-bottom:10px">Stimmen die Daten? Nach Bestätigung wird das Foto aus der App gelöscht. Das Original bleibt auf deinem Gerät.</div>';
+    // Erkannte Daten — grüne Box wie im Referenz-Design
+    body+='<div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="font-size:10px;font-weight:800;color:#15803d;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">ERKANNTE DATEN</div>';
 
-    // Editable fields
     body+=_editRow('beschr','Beschreibung',d.beschr||'');
     body+=_editRow('datum','Datum',d.datum||'');
     body+=_editRow('studio','Studio',d.studio||'');
@@ -4800,27 +4795,22 @@ function dokOpenDetail(id){
       body+=_editRow('titel','Titel',d.titel||'');
       body+=_editRow('regie','Regie',d.regie||'');
       body+=_editRow('rolle','Rolle(n)',d.rolle||'');
-      body+=_editRow('uhrzeit','Start',d.uhrzeit||'');
+      body+=_editRow('uhrzeit','Beginn',d.uhrzeit||'');
       body+=_editRow('bis_uhrzeit','Ende',d.bis_uhrzeit||'');
       body+=_editRow('takes','Takes',d.takes||'');
-      body+='<div style="background:#fffbeb;border-radius:8px;padding:8px 10px;margin:6px 0 4px;border:1px solid #fde68a">'
-        +'<div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📊 GVL-Daten</div>'
-        +_editRow('gvl_staffel','Staffel',d.gvl_staffel||'')
-        +_editRow('gvl_folge','Folge',d.gvl_folge||'')
-        +_editRow('gvl_takes','Takes (GVL)',d.gvl_takes||d.takes||'')
-        +'</div>';
+      body+=_editRow('gvl_staffel','Staffel',d.gvl_staffel||'');
+      body+=_editRow('gvl_folge','Folge',d.gvl_folge||'');
+      body+=_editRow('gvl_takes','Takes GVL',d.gvl_takes||d.takes||'');
     }
     if(d.typ==='abrechn'){
       body+=_editRow('gutschrift_nr','Gutschrift-Nr.',d.gutschrift_nr||'');
       body+=_editRow('takes','Takes',d.takes||'');
-      body+=_editRow('take_gage','Take-Gage €',d.take_gage||'');
-      body+=_editRow('grundgage','Grundgage €',d.grundgage||'');
-      body+=_editRow('brutto','Brutto €',d.brutto||'');
-      body+=_editRow('netto','Netto €',d.netto||'');
-      body+=_editRow('auszahlung','Auszahlung €',d.auszahlung||'');
-      body+=_editRow('kv_abzug','KV-Abzug €',d.kv_abzug||'');
-      body+=_editRow('rv_abzug','RV-Abzug €',d.rv_abzug||'');
-      body+=_editRow('pv_abzug','PV-Abzug €',d.pv_abzug||'');
+      body+=_editRow('take_gage','Take-Gage',d.take_gage||'');
+      body+=_editRow('grundgage','Grundgage',d.grundgage||'');
+      body+=_editRow('brutto','Brutto',d.brutto||'');
+      body+=_editRow('kv_abzug','KV+RV+PV',d.kv_abzug||'');
+      body+=_editRow('netto','Netto',d.netto||'');
+      body+=_editRow('auszahlung','Auszahlung',d.auszahlung||'');
     }
     if(d.typ==='ausgabe'){
       body+=_editRow('brutto','Betrag €',d.brutto||'');
@@ -4968,11 +4958,9 @@ function dokOpenDetail(id){
   }
 
   document.getElementById('dok-detail-body').innerHTML=body;
-  // Footer ein/ausblenden — je nach State NUR die passenden Buttons
-  var footerConfirm=document.getElementById('dok-footer-confirm');
-  var footerAnalyse=document.getElementById('dok-footer-analyse');
-  if(footerAnalyse) footerAnalyse.style.display=(notAnalysed||confirmed)?'block':'none';
-  if(footerConfirm) footerConfirm.style.display=awaitConfirm?'block':'none';
+  // Footer: nur Bestätigen-Footer — KI-Button ist im scrollbaren Bereich
+  var footer=document.getElementById('dok-footer-confirm');
+  if(footer) footer.style.display=awaitConfirm?'block':'none';
   document.getElementById('dok-detail-overlay').style.display='block';
   var sheet=document.getElementById('dok-detail-sheet');
   sheet.style.display='flex';
@@ -5252,8 +5240,6 @@ function dokLinkToTermin(terminId){
 function dokBearbeitenModus(){
   var d=(db.dokumente||[]).find(function(x){return x.id===_dokCurrentId;});
   if(!d) return;
-  // Set back to awaitConfirm state so edit fields appear
-  // Keep bestaetigt flag but re-inject a placeholder dataURL flag
   d._editMode=true;
   dokOpenDetail(d.id);
 }
@@ -5262,15 +5248,16 @@ function dokAnalyseOne(){
   var d=(db.dokumente||[]).find(function(x){return x.id===_dokCurrentId;});
   if(!d) return;
   if(!d.dataURL && d.bestaetigt){ dokBearbeitenModus(); return; }
+  if(!d.dataURL){ showToast('Kein Foto mehr in der App'); return; }
   var key=(db.profil&&db.profil.apiKey)||getKey()||null;
   if(!key){ showToast('Kein API-Key'); return; }
 
-  // Spinner-Overlay über dem Sheet zeigen
+  // Spinner
   var spinner=document.createElement('div');
   spinner.id='dok-analyse-spinner';
   spinner.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px';
   spinner.innerHTML='<div style="width:64px;height:64px;border:5px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></div>'
-    +'<div style="color:#fff;font-size:15px;font-weight:700;letter-spacing:.2px">KI liest Dokument…</div>'
+    +'<div style="color:#fff;font-size:15px;font-weight:700">KI liest Dokument…</div>'
     +'<div style="color:rgba(255,255,255,.6);font-size:12px">Bitte kurz warten</div>';
   if(!document.getElementById('spin-style')){
     var st=document.createElement('style');
@@ -5284,21 +5271,12 @@ function dokAnalyseOne(){
   if(btn){ btn.textContent='⏳ Analysiere…'; btn.style.opacity='.5'; btn.style.pointerEvents='none'; }
 
   dokAnalyseDoc(d,key,function(){
-    // Spinner entfernen
     var sp=document.getElementById('dok-analyse-spinner');
     if(sp) sp.remove();
-    save(db);
-    rDokumente();
-    dokOpenDetail(d.id);
-    // Kurz warten bis DOM neu gerendert, dann zu den Feldern scrollen
+    save(db); rDokumente(); dokOpenDetail(d.id);
     setTimeout(function(){
-      var sheet=document.getElementById('dok-detail-sheet');
       var body=document.getElementById('dok-detail-body');
-      if(sheet&&body){
-        // Zum Rollen-Feld scrollen damit User sofort Werte sieht
-        var scrollTarget=body.querySelector('input[id="dok-edit-rolle"]')||body.querySelector('input')||body;
-        if(scrollTarget&&scrollTarget.scrollIntoView) scrollTarget.scrollIntoView({behavior:'smooth',block:'center'});
-      }
+      if(body){ var inp=body.querySelector('input'); if(inp&&inp.scrollIntoView) inp.scrollIntoView({behavior:'smooth',block:'center'}); }
     },120);
     showToast('✓ Analysiert – bitte prüfen & bestätigen');
   });
@@ -7310,17 +7288,14 @@ function suchHL(text,q){
         <span>📅</span><div style="flex:1;text-align:left"><div style="font-size:12px;font-weight:700;color:#333">Manuell wählen</div></div>
       </button>
     </div>
+    <div style="display:flex;justify-content:flex-end;padding-bottom:4px">
+      <button type="button" id="dok-detail-analyse-btn" onclick="dokDeleteOne()" style="background:#fff0f6;border:1.5px solid #fbcfe8;color:#be185d;padding:9px 14px;border-radius:10px;font-weight:700;cursor:pointer;touch-action:manipulation;font-size:13px">🗑 Löschen</button>
+    </div>
     </div>
   </div><!-- end scroll wrapper -->
-  <!-- STATISCHE FOOTER-BUTTONS — ausserhalb scroll, immer tappbar -->
-  <div id="dok-footer-analyse" style="display:none;padding:8px 16px 4px;background:#fff;border-top:1px solid #f0f0f0;flex-shrink:0">
-    <div style="display:flex;gap:8px">
-      <button type="button" id="dok-detail-analyse-btn" onclick="dokAnalyseOne()" style="flex:1;background:#be185d;color:#fff;padding:11px;border-radius:10px;text-align:center;font-weight:700;font-size:13px;cursor:pointer;border:none;touch-action:manipulation">🔍 KI analysieren</button>
-      <button type="button" onclick="dokDeleteOne()" style="background:#fff0f6;border:1.5px solid #fbcfe8;color:#be185d;padding:11px 14px;border-radius:10px;font-weight:700;cursor:pointer;touch-action:manipulation">🗑</button>
-    </div>
-  </div>
+  <!-- STATISCHER BESTÄTIGEN-FOOTER — ausserhalb scroll, immer tappbar auf iOS -->
   <div id="dok-footer-confirm" style="display:none;padding:0 16px 12px;background:#fff;border-top:1px solid #f0f0f0;flex-shrink:0">
-    <button type="button" id="dok-confirm-btn" onclick="dokBestaetigen()" style="width:100%;background:#15803d;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:8px;touch-action:manipulation;display:block">✓ Bestätigen & Foto löschen</button>
+    <button type="button" id="dok-confirm-btn" onclick="dokBestaetigen()" style="width:100%;background:#15803d;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:8px;touch-action:manipulation;display:block">✓ Speichern & zuordnen</button>
     <button type="button" id="dok-ablehnen-btn" onclick="dokAblehnen()" style="width:100%;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:10px;font-weight:700;font-size:13px;cursor:pointer;color:#c2410c;touch-action:manipulation;display:block">✗ Daten falsch – neu analysieren</button>
   </div>
 </div>
