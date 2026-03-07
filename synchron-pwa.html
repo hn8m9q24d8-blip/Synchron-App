@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 08:51</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 10:28</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -1812,6 +1812,8 @@ function updateBadge(){
 function openDetail(id){
   var t=db.termine.find(function(x){return x.id===id;});
   if(!t)return;
+  // ★ Pending Dok-Verknüpfung: wenn Nutzer aus Dok-Sheet hierher navigiert ist ★
+  if(_pendingDokLink){ _checkPendingDokLink(id); return; }
   ctid=id;
   var dp=document.getElementById('detail-panel');
   if(dp)dp.classList.add('open');
@@ -2476,34 +2478,181 @@ function handleGVLDispoUpload(evt){
 
 // ── GVL ───────────────────────────────────────────────────────
 function rGVL(){
-  var year=document.getElementById('gvl-year');
-  if(!year)return;
-  var y=parseInt(year.value)||new Date().getFullYear();
-  var ur=db.profil.ust!=null?db.profil.ust:0.07;
-  var termine=db.termine.filter(function(t){return t.datum&&t.datum.startsWith(String(y));});
-  var total=0;
-  var studios={};
-  termine.forEach(function(t){
-    var net=t.pauschalgage||(t.kommgage||0)+(t.takes||0)*(t.rate||0);
-    total+=net;
-    if(t.studio){studios[t.studio]=(studios[t.studio]||0)+net;}
+  var yearLabel=document.getElementById('gvl-year-label');
+  var y=_gvlYear||(new Date().getFullYear());
+  if(yearLabel) yearLabel.textContent=y;
+
+  var prods=gvlBuildData(y);
+  var keys=Object.keys(prods).sort();
+
+  // Stat-Kacheln
+  var totalEntries=0;
+  keys.forEach(function(k){
+    var p=prods[k];
+    Object.keys(p.staffeln).forEach(function(sk){
+      var st=p.staffeln[sk];
+      totalEntries+=Object.keys(st.folgen).length;
+    });
   });
-  var statEl=document.getElementById('gvl-stat');
-  if(statEl){
-    statEl.innerHTML='<div class="gage-row"><span>Termine '+y+'</span><span>'+termine.length+'</span></div>'
-      +'<div class="gage-row"><span>Netto gesamt</span><span>'+total.toFixed(2).replace('.',',')+' €</span></div>'
-      +'<div class="gage-row gage-total"><span>Brutto gesamt</span><span>'+(total*(1+ur)).toFixed(2).replace('.',',')+' €</span></div>';
+  var withProof=keys.filter(function(k){return prods[k].dokCount>0;}).length;
+  var cp=document.getElementById('gvl-count-prod'); if(cp) cp.textContent=keys.length;
+  var ce=document.getElementById('gvl-count-entries'); if(ce) ce.textContent=totalEntries;
+  var cw=document.getElementById('gvl-count-proof'); if(cw) cw.textContent=withProof;
+  var sub=document.getElementById('gvl-sub'); if(sub) sub.textContent=keys.length+' Produktionen · '+totalEntries+' Folgeneinträge';
+
+  var list=document.getElementById('gvl-list');
+  if(!list) return;
+
+  if(!keys.length){
+    list.innerHTML='<div style="text-align:center;padding:32px 16px;color:#aaa;font-size:13px">'
+      +'<div style="font-size:32px;margin-bottom:8px">🎭</div>'
+      +'Noch keine GVL-Daten für '+y+'.<br>'
+      +'<span style="font-size:11px">Dispos analysieren und bestätigen → Staffel/Folge/Takes werden automatisch erkannt.</span>'
+      +'</div>';
+    return;
   }
-  var stEl=document.getElementById('gvl-studios');
-  if(stEl){
-    stEl.innerHTML=Object.keys(studios).sort().map(function(s){
-      return '<div class="gage-row"><span>'+esc(s)+'</span><span>'+studios[s].toFixed(2).replace('.',',')+' €</span></div>';
+
+  list.innerHTML=keys.map(function(k){
+    var p=prods[k];
+    var skeys=Object.keys(p.staffeln).sort(function(a,b){ return parseInt(a.slice(1))-parseInt(b.slice(1)); });
+    var staffelHtml=skeys.map(function(sk){
+      var st=p.staffeln[sk];
+      var fkeys=Object.keys(st.folgen).sort(function(a,b){ return st.folgen[a].folge-st.folgen[b].folge; });
+      var folgenChips=fkeys.map(function(fk){
+        var f=st.folgen[fk];
+        return '<div style="background:#fff;border:1.5px solid #b3d7f0;border-radius:7px;padding:4px 8px;text-align:center;min-width:46px">'
+          +'<div style="font-size:9px;font-weight:700;color:#888">F'+f.folge+'</div>'
+          +'<div style="font-size:15px;font-weight:900;color:#1a6ea8">'+f.takes+'</div>'
+          +'</div>';
+      }).join('');
+      return '<div style="margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'
+        +'<div style="font-size:11px;font-weight:800;color:#1a6ea8">Staffel '+st.staffel+'</div>'
+        +'<div style="font-size:11px;color:#888">∑ <b>'+st.takes_summe+'</b> Takes · '+fkeys.length+' Folgen</div>'
+        +'</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:4px">'+folgenChips+'</div>'
+        +'</div>';
     }).join('');
-  }
+
+    var noDok=p.dokCount===0;
+    return '<div style="background:#fff;border:1.5px solid #e0d5c8;border-radius:14px;padding:14px;margin:0 16px 12px">'
+      // Header
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">'
+      +'<div style="flex:1">'
+      +'<div style="font-size:15px;font-weight:900;color:#222">'+esc(p.titel)+'</div>'
+      +(p.rolle?'<div style="font-size:12px;font-weight:700;color:#6d28d9;margin-top:2px">🎭 '+esc(p.rolle)+'</div>':'')
+      +(p.studio?'<div style="font-size:11px;color:#888;margin-top:1px">🏢 '+esc(p.studio)+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'
+      +'<div style="background:#e8f4fd;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:900;color:#1a6ea8">'+p.takes_gesamt+' Takes</div>'
+      +(noDok?'<div style="font-size:9px;color:#f59e0b;font-weight:700;background:#fffbeb;border:1px solid #fcd34d;border-radius:5px;padding:2px 5px">⚠ Kein Dispo</div>'
+             :'<div style="font-size:9px;color:#15803d;font-weight:700;background:#f0fdf4;border:1px solid #86efac;border-radius:5px;padding:2px 5px">'+p.dokCount+' Dispo'+( p.dokCount>1?'s':'')+'</div>')
+      +'</div>'
+      +'</div>'
+      // Staffeln
+      +(skeys.length?staffelHtml
+        :'<div style="font-size:11px;color:#f59e0b;padding:6px 0">⚠ Keine Folgen-Aufschlüsselung — Dispo nochmal analysieren</div>')
+      // Termine
+      +'<div style="border-top:1px solid #f0ece7;margin-top:8px;padding-top:6px;font-size:10px;color:#aaa">'+p.termine_count+' Aufnahmetag'+(p.termine_count!==1?'e':'')+(p.datum_range?' · '+p.datum_range:'')+'</div>'
+      +'</div>';
+  }).join('');
 }
+
+var _gvlYear=new Date().getFullYear();
+
 function changeGVLYear(dir){
-  var el=document.getElementById('gvl-year');
-  if(el){el.value=parseInt(el.value)+dir;rGVL();}
+  _gvlYear=(_gvlYear||new Date().getFullYear())+dir;
+  rGVL();
+}
+
+function gvlBuildData(year){
+  var prods={};
+  var yStr=String(year);
+
+  // ★ Primärquelle: bestätigte Dispo-Dokumente mit GVL-Daten ★
+  (db.dokumente||[]).forEach(function(d){
+    if(!d.bestaetigt || d.typ!=='dispo') return;
+    if(!d.datum || !d.datum.startsWith(yStr)) return;
+    var key=(d.titel||d.studio||'Unbekannt').trim();
+    if(!prods[key]) prods[key]={
+      titel:key, studio:d.studio||'', rolle:d.rolle||'',
+      staffeln:{}, takes_gesamt:0, termine_count:0, dokCount:0,
+      datum_min:d.datum, datum_max:d.datum
+    };
+    var p=prods[key];
+    p.dokCount++;
+    p.termine_count++;
+    if(d.rolle&&!p.rolle) p.rolle=d.rolle;
+    if(d.studio&&!p.studio) p.studio=d.studio;
+    if(d.datum<p.datum_min) p.datum_min=d.datum;
+    if(d.datum>p.datum_max) p.datum_max=d.datum;
+    if(p.datum_min!==p.datum_max) p.datum_range=fd(p.datum_min)+' – '+fd(p.datum_max);
+    else p.datum_range=fd(p.datum_min);
+
+    // ★ Granulare Takes-Detail aus Dispo (506:25 etc.) ★
+    if(d.gvl_takes_detail && d.gvl_takes_detail.length){
+      d.gvl_takes_detail.forEach(function(e){
+        var folgeNr=parseInt(String(e.folge).slice(-2));
+        var staffelNr=parseInt(String(e.folge).slice(0,-2))||parseInt(d.gvl_staffel||0);
+        var takes=parseInt(e.takes)||0;
+        p.takes_gesamt+=takes;
+        var sk='S'+staffelNr;
+        if(!p.staffeln[sk]) p.staffeln[sk]={staffel:staffelNr,folgen:{},takes_summe:0};
+        var fkey='F'+folgeNr;
+        if(!p.staffeln[sk].folgen[fkey]) p.staffeln[sk].folgen[fkey]={folge:folgeNr,takes:0};
+        p.staffeln[sk].folgen[fkey].takes+=takes;
+        p.staffeln[sk].takes_summe+=takes;
+      });
+    } else if(d.gvl_staffel) {
+      // Fallback: nur Staffel bekannt, keine Folgenaufschlüsselung
+      var takes=parseInt(d.gvl_takes||d.takes)||0;
+      p.takes_gesamt+=takes;
+      var staffelNr=parseInt(d.gvl_staffel||0);
+      var sk='S'+staffelNr;
+      if(!p.staffeln[sk]) p.staffeln[sk]={staffel:staffelNr,folgen:{},takes_summe:0};
+      if(d.gvl_folge){
+        var folgen=String(d.gvl_folge).split(',');
+        folgen.forEach(function(fStr){
+          var folgeNr=parseInt(fStr.trim());
+          if(!folgeNr) return;
+          var fkey='F'+folgeNr;
+          var perFolge=Math.round(takes/folgen.length);
+          if(!p.staffeln[sk].folgen[fkey]) p.staffeln[sk].folgen[fkey]={folge:folgeNr,takes:0};
+          p.staffeln[sk].folgen[fkey].takes+=perFolge;
+          p.staffeln[sk].takes_summe+=perFolge;
+        });
+      } else {
+        // Kein Folgen-Detail — nimm Staffel-Entry ohne Folge
+        var fkey='F?';
+        if(!p.staffeln[sk].folgen[fkey]) p.staffeln[sk].folgen[fkey]={folge:'?',takes:0};
+        p.staffeln[sk].folgen[fkey].takes+=takes;
+        p.staffeln[sk].takes_summe+=takes;
+      }
+    } else {
+      // Gar keine GVL-Daten am Dispo
+      var takes=parseInt(d.takes)||0;
+      p.takes_gesamt+=takes;
+    }
+  });
+
+  // Sekundärquelle: Termine die keine verknüpften Dispo-Docs haben
+  (db.termine||[]).forEach(function(t){
+    if(!t.datum||!t.datum.startsWith(yStr)) return;
+    if(t.dispoDocId) return; // schon über Dispo erfasst
+    var takes=parseInt(t.takes)||0;
+    if(!takes) return;
+    var key=(t.titel||t.studio||'Unbekannt').trim();
+    if(!prods[key]) prods[key]={
+      titel:key, studio:t.studio||'', rolle:t.rolle||'',
+      staffeln:{}, takes_gesamt:0, termine_count:0, dokCount:0
+    };
+    var p=prods[key];
+    p.termine_count++;
+    p.takes_gesamt+=takes;
+    if(t.rolle&&!p.rolle) p.rolle=t.rolle;
+  });
+
+  return prods;
 }
 function rStat(){rGVL();}
 function rInbox(){rDispos();}
@@ -2609,8 +2758,7 @@ function gvlBuildData(year){
 }
 
 function exportGVLExcel(){
-  var yearEl=document.getElementById('gvl-year');
-  var year=parseInt(yearEl?yearEl.value:new Date().getFullYear())||new Date().getFullYear();
+  var year=_gvlYear||new Date().getFullYear();
   var prods=gvlBuildData(year);
   var keys=Object.keys(prods);
   if(!keys.length){showToast('Keine Daten fuer '+year);return;}
@@ -4434,12 +4582,33 @@ function dokAnalyseDoc(d, key, cb){
     +'  rolle = seine Rolle (z.B. "Bruno", "Naruto")\n'
     +'  uhrzeit = VON-Zeit seiner Zeile (HH:MM)\n'
     +'  bis_uhrzeit = BIS-Zeit seiner Zeile (HH:MM)\n'
-    +'  takes = Anzahl Takes seiner Zeile\n'
+    +'  takes = Gesamtanzahl Takes seiner Zeile (die eine Zahl, z.B. 72)\n'
     +'  datum = Aufnahmedatum aus Briefkopf (YYYY-MM-DD)\n'
-    +'  studio = Studioname aus Logo/Briefkopf (kurz: "VSI", "Interopa" etc.)\n'
-    +'  titel = Serientitel/Produktionsname\n'
+    +'  studio = Studioname aus Logo/Briefkopf (kurz: "VSI", "Interopa", "Transperfect" etc.)\n'
+    +'  titel = Serientitel/Produktionsname (NUR der Serienname, OHNE Staffel/Episoden-Bezeichnung)\n'
     +'  regie = Regisseur falls angegeben\n'
     +'  episode = Folgen-/Episodenbezeichnung falls vorhanden\n'
+    +'\n'
+    +'★ STAFFEL & EPISODE aus Kopfbereich (WICHTIG): Im Briefkopf oder neben dem Titel\n'
+    +'  stehen oft Staffel/Episoden-Angaben in verschiedenen Schreibweisen:\n'
+    +'  "S3" oder "S 3" = nur Staffel 3 → gvl_staffel_header = "3", gvl_episode_header = null\n'
+    +'  "S3E5" oder "S3 E5" oder "S3EP5" = Staffel 3 Episode 5 → gvl_staffel_header = "3", gvl_episode_header = "5"\n'
+    +'  "Staffel 3" = gvl_staffel_header = "3"\n'
+    +'  "Staffel 3 Episode 5" oder "Staffel 3 Folge 5" = gvl_staffel_header = "3", gvl_episode_header = "5"\n'
+    +'  Diese Felder aus dem KOPF der Dispo extrahieren (nicht aus der Takes-Tabelle).\n'
+    +'  Falls nicht vorhanden: null\n'
+    +'\n'
+    +'★ GVL-TAKES-DETAIL (WICHTIG bei Dispo): In der TAKES-Spalte stehen oft mehrere Eintraege\n'
+    +'  im Format "StaffelFolge:Takes" getrennt durch Komma.\n'
+    +'  Beispiel: "506:25, 507:19, 508:14, 509:14"\n'
+    +'  Bedeutung: 506:25 = Staffel 5, Folge 6, 25 Takes\n'
+    +'             507:19 = Staffel 5, Folge 7, 19 Takes\n'
+    +'             508:14 = Staffel 5, Folge 8, 14 Takes\n'
+    +'  Format der Nummer VOR dem Doppelpunkt: S=Staffel (erste Ziffer(n)), FF=Folge (letzte 2 Ziffern)\n'
+    +'  Die Zahl NACH dem Doppelpunkt = Anzahl Takes fuer diese Folge\n'
+    +'  Extrahiere als Array: gvl_takes_detail = [{"folge":506,"takes":25},{"folge":507,"takes":19},...]\n'
+    +'  "folge" enthaelt immer die KOMPLETTE Nummer (z.B. 506, nicht 6)\n'
+    +'  Falls kein solches Format vorhanden: gvl_takes_detail = null\n'
     +'\n'
     +'Bei "abrechn": datum = AUFNAHMEDATUM (nicht Druckdatum!), studio = Studioname,\n'
     +'  brutto/netto/auszahlung/mwst, takes/take_gage/grundgage, kv_abzug/rv_abzug/pv_abzug\n'
@@ -4449,6 +4618,8 @@ function dokAnalyseDoc(d, key, cb){
     +'JSON-Schema (typ MUSS korrekt gesetzt sein, nicht zutreffende Felder = null):\n'
     +'{"typ":"[dispo|abrechn|ausgabe|sonstig]","beschr":null,"datum":null,"studio":null,"titel":null,"regie":null,'
     +'"rolle":null,"uhrzeit":null,"bis_uhrzeit":null,"takes":null,"episode":null,'
+    +'"gvl_staffel_header":null,"gvl_episode_header":null,'
+    +'"gvl_takes_detail":null,'
     +'"gutschrift_nr":null,"take_gage":null,"grundgage":null,'
     +'"brutto":null,"netto":null,"mwst":null,"auszahlung":null,'
     +'"kv_abzug":null,"rv_abzug":null,"pv_abzug":null,"ust_satz":null}';
@@ -4496,20 +4667,44 @@ function dokAnalyseDoc(d, key, cb){
         if(j.bis_uhrzeit)  d.bis_uhrzeit=j.bis_uhrzeit;
         if(j.episode)      d.episode=j.episode;
         if(j.takes)        d.takes=j.takes;
-        // Episode-String in GVL-Felder aufdröseln (z.B. "322:31" → S3, F22, 31 Takes)
-        if(j.episode && !d.gvl_staffel){
+
+        // ★ GVL-Takes-Detail: Array [{folge:506, takes:25}, ...] ★
+        if(j.gvl_takes_detail && Array.isArray(j.gvl_takes_detail) && j.gvl_takes_detail.length){
+          d.gvl_takes_detail = j.gvl_takes_detail;
+          // Staffel aus erster Folge ableiten: 506 → Staffel 5, Folge 6
+          var firstFolge = String(j.gvl_takes_detail[0].folge||'');
+          if(firstFolge.length>=3){
+            d.gvl_staffel = firstFolge.slice(0, firstFolge.length-2); // alles außer letzte 2 Ziffern
+            // Folgen-Liste: alle Folgenummern (letzte 2 Ziffern) als komma-getrennte Liste
+            d.gvl_folge = j.gvl_takes_detail.map(function(e){
+              return String(e.folge).slice(-2).replace(/^0/,''); // "06" → "6"
+            }).join(', ');
+            d.gvl_takes = j.gvl_takes_detail.reduce(function(s,e){ return s+(parseInt(e.takes)||0); }, 0);
+          }
+        }
+        // Fallback: Episode-String in GVL-Felder aufdröseln (z.B. "322:31" → S3, F22, 31 Takes)
+        if(!d.gvl_staffel && j.episode){
           var epStr=String(j.episode);
-          // Format "322:31" oder "S3E22"
           var m1=epStr.match(/(\d{3,4}):(\d+)/);
           if(m1){
-            var code=m1[1]; // z.B. "322"
-            d.gvl_staffel=String(code[0]); // erste Ziffer = Staffel
-            d.gvl_folge=String(parseInt(code.slice(1))); // Rest = Folge
+            var code=m1[1];
+            d.gvl_staffel=String(code.slice(0, code.length-2)||code[0]);
+            d.gvl_folge=String(parseInt(code.slice(-2)));
             d.gvl_takes=parseInt(m1[2])||j.takes||0;
           } else {
             var m2=epStr.match(/[Ss](\d+)[Ee](\d+)/);
             if(m2){ d.gvl_staffel=m2[1]; d.gvl_folge=m2[2]; d.gvl_takes=j.takes||0; }
           }
+        }
+        // ★ Staffel/Episode aus Kopfbereich (S3, S3E5, Staffel 3 Episode 5 etc.) ★
+        if(j.gvl_staffel_header){
+          // Staffel aus Header immer speichern
+          d.gvl_staffel_header = String(j.gvl_staffel_header);
+          d.gvl_episode_header = j.gvl_episode_header ? String(j.gvl_episode_header) : null;
+          // Als Fallback für gvl_staffel nutzen wenn noch nicht gesetzt
+          if(!d.gvl_staffel) d.gvl_staffel = d.gvl_staffel_header;
+          // Episode als gvl_folge wenn keine Detail-Tabelle vorhanden
+          if(!d.gvl_folge && d.gvl_episode_header) d.gvl_folge = d.gvl_episode_header;
         }
         if(!d.gvl_takes && j.takes) d.gvl_takes=j.takes;
         if(j.gutschrift_nr) d.gutschrift_nr=j.gutschrift_nr;
@@ -4864,10 +5059,33 @@ function dokOpenDetail(id){
       body+=_editRow('rolle','Rolle(n)',d.rolle||'');
       body+=_editRow('uhrzeit','Beginn',d.uhrzeit||'');
       body+=_editRow('bis_uhrzeit','Ende',d.bis_uhrzeit||'');
-      body+=_editRow('takes','Takes',d.takes||'');
+      body+=_editRow('takes','Takes gesamt',d.takes||'');
       body+=_editRow('gvl_staffel','Staffel',d.gvl_staffel||'');
-      body+=_editRow('gvl_folge','Folge',d.gvl_folge||'');
-      body+=_editRow('gvl_takes','Takes GVL',d.gvl_takes||d.takes||'');
+      // Hinweis woher die Staffel-Info kommt
+      if(d.gvl_staffel_header){
+        var src='📋 Aus Kopfzeile: S'+d.gvl_staffel_header+(d.gvl_episode_header?' E'+d.gvl_episode_header:'');
+        body+='<div style="font-size:10px;color:#888;padding:2px 0 4px 88px">'+src+'</div>';
+      }
+      // ★ GVL Takes-Detail pro Folge ★
+      if(d.gvl_takes_detail && d.gvl_takes_detail.length){
+        body+='<div style="margin:6px 0;padding:8px 0;border-bottom:1px solid #fef3c7">'
+          +'<div style="font-size:10px;color:#888;margin-bottom:6px;font-weight:700">📊 GVL STAFFEL '+(d.gvl_staffel||'?')+' · TAKES PRO FOLGE</div>'
+          +'<div style="font-size:9px;color:#aaa;margin-bottom:6px">Format: StaffelFolge:Takes (z.B. 506:25 = S5 F6, 25 Takes)</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:5px">';
+        d.gvl_takes_detail.forEach(function(e){
+          var folgeNr=String(e.folge).slice(-2).replace(/^0/,'');
+          body+='<div style="background:#fff;border:1.5px solid #86efac;border-radius:7px;padding:4px 8px;text-align:center;min-width:52px">'
+            +'<div style="font-size:9px;font-weight:700;color:#888">F'+folgeNr+'</div>'
+            +'<div style="font-size:16px;font-weight:900;color:#15803d">'+e.takes+'</div>'
+            +'</div>';
+        });
+        body+='</div>'
+          +'<div style="font-size:10px;color:#888;margin-top:5px">Gesamt: <b>'+d.gvl_takes+'</b> Takes</div>'
+          +'</div>';
+      } else {
+        body+=_editRow('gvl_folge','Folge',d.gvl_folge||'');
+        body+=_editRow('gvl_takes','Takes GVL',d.gvl_takes||d.takes||'');
+      }
     }
     if(d.typ==='abrechn'){
       body+=_editRow('gutschrift_nr','Gutschrift-Nr.',d.gutschrift_nr||'');
@@ -4899,7 +5117,8 @@ function dokOpenDetail(id){
         body+='<div style="color:#333;margin-top:2px">'+esc(matchTermin.titel||matchTermin.studio||'')+(matchTermin.datum?' · '+fd(matchTermin.datum):'')+'</div>';
         if(diff!==null) body+='<div style="color:#888;font-size:11px;margin-top:2px">Erwartet: '+fmtEur(matchTermin.kommgage||0)+' | Abgerechnet: '+fmtEur(d.auszahlung||0)+' | Diff: '+fmtEur(diff)+'</div>';
       } else {
-        body+='<div style="color:#c2410c;font-weight:700">⚠ Kein Termin gefunden</div>';
+        body+='<div style="color:#c2410c;font-weight:700;margin-bottom:8px">⚠ Kein Termin gefunden</div>';
+        body+='<button type="button" onclick="dokGotoKalender(\''+d.id+'\')" style="width:100%;background:#c2410c;color:#fff;border:none;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;gap:6px">📅 Im Kalender Termin wählen oder anlegen →</button>';
       }
       body+='</div>';
     } else if(termin){
@@ -4919,11 +5138,29 @@ function dokOpenDetail(id){
     if(d.uhrzeit) chips.push('⏰ '+esc(d.uhrzeit)+(d.bis_uhrzeit?' – '+esc(d.bis_uhrzeit):''));
     if(d.takes) chips.push('🎬 '+d.takes+' Takes');
     if(d.rolle) chips.push('🎭 '+esc(d.rolle));
-    if(d.gvl_staffel||d.gvl_folge) chips.push('📊 S'+esc(d.gvl_staffel||'?')+' F'+esc(d.gvl_folge||'?'));
+    if(d.gvl_staffel) chips.push('📊 Staffel '+esc(d.gvl_staffel));
     if(chips.length){
-      body+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">';
+      body+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">';
       chips.forEach(function(ch){ body+='<div style="background:#f5f5f5;border-radius:8px;padding:4px 9px;font-size:11px;font-weight:600">'+ch+'</div>'; });
       body+='</div>';
+    }
+    // ★ GVL-Detail-Tabelle im bestätigten State ★
+    if(d.gvl_takes_detail && d.gvl_takes_detail.length){
+      body+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+        +'<div style="font-size:10px;font-weight:800;color:#15803d;text-transform:uppercase;margin-bottom:8px">📊 GVL Staffel '+esc(d.gvl_staffel||'?')+' · Takes pro Folge</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:5px">';
+      d.gvl_takes_detail.forEach(function(e){
+        var folgeNr=String(e.folge).slice(-2).replace(/^0/,'');
+        body+='<div style="background:#fff;border:1.5px solid #86efac;border-radius:7px;padding:4px 8px;text-align:center;min-width:48px">'
+          +'<div style="font-size:9px;font-weight:700;color:#888">F'+folgeNr+'</div>'
+          +'<div style="font-size:15px;font-weight:900;color:#15803d">'+e.takes+'</div>'
+          +'</div>';
+      });
+      body+='</div>'
+        +'<div style="font-size:11px;color:#15803d;font-weight:700;margin-top:6px">∑ '+d.gvl_takes+' Takes</div>'
+        +'</div>';
+    } else if(d.gvl_staffel||d.gvl_folge){
+      body+='<div style="background:#f5f5f5;border-radius:8px;padding:5px 10px;margin-bottom:8px;font-size:11px;font-weight:600;display:inline-block">📊 S'+(d.gvl_staffel||'?')+' F'+(d.gvl_folge||'?')+(d.gvl_takes?' · '+d.gvl_takes+' Takes':'')+'</div>';
     }
     if(d.typ==='abrechn'&&d.auszahlung){
       body+='<div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:10px 12px;margin-bottom:10px">';
@@ -4941,7 +5178,10 @@ function dokOpenDetail(id){
         +'<button type="button" onclick="dokDetailClose();openDetail(\''+termin.id+'\')" style="margin-top:6px;background:#15803d;color:#fff;border:none;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;touch-action:manipulation">→ Termin öffnen</button>'
         +'</div>';
     } else {
-      body+='<div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#c2410c;font-weight:600">⚠ Noch kein Termin verknüpft</div>';
+      body+='<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+        +'<div style="font-size:11px;font-weight:700;color:#c2410c;margin-bottom:8px">⚠ Noch kein Termin verknüpft</div>'
+        +'<button type="button" onclick="dokGotoKalender(\''+d.id+'\')" style="width:100%;background:#c2410c;color:#fff;border:none;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer;touch-action:manipulation">📅 Im Kalender Termin wählen oder anlegen →</button>'
+        +'</div>';
     }
   }
 
@@ -5179,6 +5419,93 @@ function dokDetailClose(){
   sheet.style.display='none';
   sheet.style.flexDirection='';
   _dokCurrentId=null;
+}
+
+// Pending-Link: Dok-ID das auf Termin wartet
+var _pendingDokLink=null;
+
+function dokGotoKalender(dokId){
+  var d=(db.dokumente||[]).find(function(x){return x.id===dokId;});
+  if(!d) return;
+  // Merken welches Dok verknüpft werden soll
+  _pendingDokLink=dokId;
+  // Sheet schließen
+  dokDetailClose();
+  // Zum Datum des Dokuments im Kalender springen
+  if(d.datum){
+    _selectedDate=d.datum;
+    calJumpToDate(d.datum);
+  }
+  // Zu Termine-View wechseln
+  switchView('termine');
+  // Hinweis-Banner anzeigen
+  setTimeout(function(){
+    var banner=document.getElementById('dok-link-banner');
+    if(!banner){
+      banner=document.createElement('div');
+      banner.id='dok-link-banner';
+      banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:600;background:#c2410c;color:#fff;font-size:12px;font-weight:700;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+      document.body.appendChild(banner);
+    }
+    var titel=d.titel||d.studio||'Dokument';
+    banner.innerHTML='<div style="flex:1;min-width:0">'
+      +'<div style="font-size:11px;opacity:.8;margin-bottom:2px">📎 Dok verknüpfen:</div>'
+      +'<div style="font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(titel.slice(0,35))+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0">'
+      +'<button type="button" onclick="dokNewTerminAusDok(\''+dokId+'\')" style="background:rgba(255,255,255,.2);color:#fff;border:1.5px solid rgba(255,255,255,.4);border-radius:8px;padding:5px 8px;font-size:11px;font-weight:700;cursor:pointer;touch-action:manipulation;white-space:nowrap">＋ Neu</button>'
+      +'<span onclick="dokLinkCancel()" style="font-size:20px;cursor:pointer;padding:0 2px;opacity:.7">✕</span>'
+      +'</div>';
+    banner.style.display='flex';
+  }, 300);
+}
+
+function dokLinkCancel(){
+  _pendingDokLink=null;
+  var banner=document.getElementById('dok-link-banner');
+  if(banner) banner.style.display='none';
+}
+
+// Neuen Termin direkt aus Dispo-Daten vorausfüllen
+function dokNewTerminAusDok(dokId){
+  var d=(db.dokumente||[]).find(function(x){return x.id===dokId;});
+  if(!d) return;
+  dokLinkCancel(); // Banner ausblenden, pending bleibt für After-Save
+  _pendingDokLink=dokId; // wieder setzen — nach Save verknüpfen
+  var sheet=document.getElementById('termin-sheet');
+  if(!sheet) return;
+  var titleEl=document.getElementById('ts-sheet-title');
+  if(titleEl) titleEl.textContent='Neuer Termin';
+  var fid=document.getElementById('f-id'); if(fid) fid.value='';
+  var el;
+  el=document.getElementById('f-titel'); if(el) el.value=d.titel||d.beschr||'';
+  el=document.getElementById('f-datum'); if(el) el.value=d.datum||today();
+  el=document.getElementById('f-uhrzeit'); if(el) el.value=d.uhrzeit||'10:00';
+  el=document.getElementById('f-studio'); if(el) el.value=d.studio||'';
+  el=document.getElementById('f-rolle'); if(el) el.value=d.rolle||'';
+  el=document.getElementById('f-notizen'); if(el) el.value='';
+  takesSetVal(parseInt(d.takes)||0); setTimeout(drumRender,30);
+  el=document.getElementById('f-rate'); if(el) el.value=d.take_gage||'';
+  el=document.getElementById('f-kommgage'); if(el) el.value=d.grundgage||'';
+  el=document.getElementById('f-status'); if(el) el.value='offen';
+  sheet.classList.add('open');
+  // Nach dem Speichern: saveTermin löst openDetail aus → _checkPendingDokLink greift
+}
+function _checkPendingDokLink(terminId){
+  if(!_pendingDokLink) return;
+  var d=(db.dokumente||[]).find(function(x){return x.id===_pendingDokLink;});
+  var t=(db.termine||[]).find(function(x){return x.id===terminId;});
+  if(!d||!t) return;
+  _pendingDokLink=null;
+  dokLinkCancel();
+  // Verknüpfen
+  d.terminId=terminId;
+  var changed=dokMergeIntoTermin(d,t);
+  save(db); rDokumente(); rTermine();
+  showToast('✓ Dokument mit Termin verknüpft');
+  // Merge-Summary zeigen, dann Termin öffnen
+  if(changed.length) _showMergeSummary(t, changed, d);
+  else openDetail(terminId);
 }
 
 function dokSetKat(kat){
