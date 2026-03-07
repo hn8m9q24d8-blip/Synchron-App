@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-06 10:38</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 07:04</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -3330,7 +3330,8 @@ var KALENDER_2026=[
   {titel:"Taunusfilm / C. Frommann",studio:"Taunusfilm",datum:"2026-03-03",uhrzeit:"10:00",regie:"C. Frommann",notizen:"Stromstr.",calEventId:"BADB908A:55854323",sourceTitle:"Taunus Stromstr"},
   {titel:"Iyuno",studio:"Iyuno",datum:"2026-03-03",uhrzeit:"14:00",regie:"",notizen:"EUREF Atelier 3",calEventId:"BADB908A:c0786df4",sourceTitle:"Iyuno Euref"},
   {titel:"Neue Tonfilm / The Drama",studio:"Neue Tonfilm",datum:"2026-03-04",uhrzeit:"13:30",regie:"Lilli Hoepner",notizen:"Sonnenallee Atelier 3",calEventId:"BADB908A:9135c612",sourceTitle:"Neue Tonfilm The Drama"},
-  {titel:"Transperfect",studio:"Transperfect",datum:"2026-03-06",uhrzeit:"10:00",regie:"",notizen:"Naglerstr. 5",calEventId:"BADB908A:715749fc",sourceTitle:"Transperfect"}
+  {titel:"Transperfect",studio:"Transperfect",datum:"2026-03-06",uhrzeit:"10:00",regie:"",notizen:"Naglerstr. 5",calEventId:"BADB908A:715749fc",sourceTitle:"Transperfect"},
+  {titel:"RC Bberg",studio:"RC",datum:"2026-03-09",uhrzeit:"18:00",regie:"Sablik",notizen:"Babelsberg Atelier 2",calEventId:"BADB908A:cc489a41",sourceTitle:"RC Bberg Atl 2 Sablik"}
 ];
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -4943,7 +4944,8 @@ function dokOpenDetail(id){
   var footerConfirm=document.getElementById('dok-footer-confirm');
   var footerAnalyse=document.getElementById('dok-footer-analyse');
   if(footerConfirm) footerConfirm.style.display=awaitConfirm?'block':'none';
-  if(footerAnalyse) footerAnalyse.style.display=confirmed?'none':'block';
+  // KI-Button immer zeigen (ausser wenn bestaetigt und kein Bild)
+  if(footerAnalyse) footerAnalyse.style.display=(confirmed&&!d.dataURL)?'none':'block';
   document.getElementById('dok-detail-overlay').style.display='block';
   var sheet=document.getElementById('dok-detail-sheet');
   sheet.style.display='flex';
