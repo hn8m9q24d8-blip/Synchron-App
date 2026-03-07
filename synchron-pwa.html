@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 08:15</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 08:45</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -4754,10 +4754,15 @@ function dokOpenDetail(id){
   // Title
   document.getElementById('dok-detail-title').textContent=d.beschr||d.dateiname||'Dokument';
 
-  // Preview image: only show when awaiting confirm
+  // Preview image: show when doc has a dataURL
   var img=document.getElementById('dok-detail-img');
-  // Top preview hidden - full image shown inline in confirm section below
-  img.style.display='none';
+  if(d.dataURL && d.mime!=='application/pdf'){
+    img.src=d.dataURL;
+    img.style.display='block';
+  } else {
+    img.src='';
+    img.style.display='none';
+  }
 
   // Category chips
   var katColors={dispo:'#1a6ea8',abrechn:'#c2410c',ausgabe:'#15803d',sonstig:'#555'};
@@ -4887,20 +4892,13 @@ function dokOpenDetail(id){
         +'</div>';
     }
 
-    // ORIGINAL DOKUMENT ZUM ABGLEICH
-    if(d.dataURL && d.mime!=='application/pdf'){
+    // PDF inline (Bilder werden oben im Sheet-Header angezeigt)
+    if(d.dataURL && d.mime==='application/pdf'){
       body+='<div style="margin-bottom:12px">'
-        +'<div style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">📄 Original zum Abgleich</div>'
-        +'<img src="'+d.dataURL+'" style="width:100%;border-radius:10px;border:1.5px solid #e5e7eb;display:block;cursor:zoom-in" onclick="viewImgFullDok(\''+_dokCurrentId+'\')">'
-        +'<div style="font-size:10px;color:#aaa;text-align:center;margin-top:4px">Antippen für Vollbild</div>'
-        +'</div>';
-    } else if(d.dataURL && d.mime==='application/pdf'){
-      body+='<div style="margin-bottom:12px">'
-        +'<div style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">📄 Original zum Abgleich</div>'
+        +'<div style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">📄 PDF-Vorschau</div>'
         +'<div style="border-radius:10px;overflow:hidden;border:1.5px solid #e5e7eb;background:#f5f5f5">'
-        +'<iframe src="'+d.dataURL+'" style="width:100%;height:480px;border:none;display:block" scrolling="yes"></iframe>'
+        +'<iframe src="'+d.dataURL+'" style="width:100%;height:400px;border:none;display:block" scrolling="yes"></iframe>'
         +'</div>'
-        +'<div style="font-size:10px;color:#aaa;text-align:center;margin-top:4px">Scrollen zum Lesen · wird nach Bestätigung gelöscht</div>'
         +'</div>';
     }
 
@@ -7314,13 +7312,12 @@ function suchHL(text,q){
       </button>
     </div>
     </div>
-  </div>
   </div><!-- end scroll wrapper -->
-  <!-- STATISCHE FOOTER-BUTTONS -->
+  <!-- STATISCHE FOOTER-BUTTONS — ausserhalb scroll, immer tappbar -->
   <div id="dok-footer-analyse" style="display:none;padding:8px 16px 4px;background:#fff;border-top:1px solid #f0f0f0;flex-shrink:0">
     <div style="display:flex;gap:8px">
       <button type="button" id="dok-detail-analyse-btn" onclick="dokAnalyseOne()" style="flex:1;background:#be185d;color:#fff;padding:11px;border-radius:10px;text-align:center;font-weight:700;font-size:13px;cursor:pointer;border:none;touch-action:manipulation">🔍 KI analysieren</button>
-      <button type="button" onclick="dokDeleteOne()" style="background:#fff0f6;border:1.5px solid #fbcfe8;color:#be185d;padding:11px 14px;border-radius:10px;font-weight:700;cursor:pointer;border:1.5px solid #fbcfe8;touch-action:manipulation">🗑</button>
+      <button type="button" onclick="dokDeleteOne()" style="background:#fff0f6;border:1.5px solid #fbcfe8;color:#be185d;padding:11px 14px;border-radius:10px;font-weight:700;cursor:pointer;touch-action:manipulation">🗑</button>
     </div>
   </div>
   <div id="dok-footer-confirm" style="display:none;padding:0 16px 12px;background:#fff;border-top:1px solid #f0f0f0;flex-shrink:0">
