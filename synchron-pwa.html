@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 07:04</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 07:22</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -1582,7 +1582,36 @@ function ddb(){
   };
 }
 function load(){try{return JSON.parse(localStorage.getItem(DBK))||ddb();}catch(e){return ddb();}}
-function save(d){localStorage.setItem(DBK,JSON.stringify(d));}
+function save(d){
+  try{
+    localStorage.setItem(DBK,JSON.stringify(d));
+  }catch(e){
+    // QuotaExceededError: strip large dataURLs from confirmed docs and retry
+    if(e.name==='QuotaExceededError'||e.code===22){
+      var stripped=JSON.parse(JSON.stringify(d));
+      (stripped.dokumente||[]).forEach(function(dok){
+        // Keep dataURL only for unconfirmed docs needing KI analysis
+        var isConfirmed=dok.typ&&dok.typ!=='offen'&&!dok.dataURL;
+        if(!isConfirmed && dok.dataURL && dok.dataURL.length>50000){
+          // Already confirmed or has thumb - strip full image
+          if(dok.typ&&dok.typ!=='offen') dok.dataURL=null;
+        }
+      });
+      try{
+        localStorage.setItem(DBK,JSON.stringify(stripped));
+        // Update in-memory db too
+        Object.assign(d,stripped);
+      }catch(e2){
+        showToast('⚠ Speicher voll – älteste Belegfotos werden gelöscht');
+        // Last resort: remove dataURLs from all confirmed docs
+        (d.dokumente||[]).forEach(function(dok){
+          if(dok.typ&&dok.typ!=='offen'&&dok.dataURL) dok.dataURL=null;
+        });
+        try{localStorage.setItem(DBK,JSON.stringify(d));}catch(e3){}
+      }
+    }
+  }
+}
 var db=load();
 (function(){var lk=getKey();if(lk){if(!db.profil)db.profil={};if(!db.profil.apiKey){db.profil.apiKey=lk;save(db);}}})();
 
@@ -4749,8 +4778,9 @@ function dokOpenDetail(id){
   if(notAnalysed){
     body+='<div style="background:#f5f5f5;border-radius:12px;padding:16px;text-align:center;margin-bottom:12px">'
       +'<div style="font-size:32px;margin-bottom:8px">📎</div>'
-      +'<div style="font-size:14px;font-weight:700;margin-bottom:4px">Noch nicht analysiert</div>'
-      +'<div style="font-size:12px;color:#888">KI liest alle Daten automatisch aus</div>'
+      +'<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+esc(d.dateiname||'Dokument')+'</div>'
+      +'<div style="font-size:12px;color:#888;margin-bottom:12px">Noch nicht analysiert – KI liest alle Daten aus</div>'
+      +'<div onclick="dokAnalyseOne()" style="background:#be185d;color:#fff;border-radius:10px;padding:12px 20px;font-weight:800;font-size:14px;cursor:pointer;display:inline-block;touch-action:manipulation">🔍 Jetzt KI analysieren</div>'
       +'</div>';
     if(d.mime==='application/pdf') body+='<div style="text-align:center;padding:12px;background:#f5f5f5;border-radius:8px;color:#555;font-size:13px;margin-bottom:12px">📄 '+esc(d.dateiname||'PDF')+'</div>';
 
