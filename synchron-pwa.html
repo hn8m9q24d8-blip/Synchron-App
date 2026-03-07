@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 09:12</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 08:51</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -649,6 +649,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <input id="dok-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
       <input id="ics-import-input" type="file" accept="*/*" style="display:none" onchange="icsImport(this)">
       <button type="button" onclick="dokRefreshAll()" style="background:#be185d;color:#fff;font-size:12px;font-weight:700;padding:7px 10px;border-radius:8px;cursor:pointer;border:none;touch-action:manipulation">🔍 Alle</button>
+      <button type="button" onclick="dokClearEingang()" style="background:#f5f5f5;color:#999;font-size:12px;font-weight:700;padding:7px 10px;border-radius:8px;cursor:pointer;border:1.5px solid #e0e0e0;touch-action:manipulation" title="Nicht bestätigte Dokumente löschen">🗑 Eingang</button>
     </div>
   </div>
 
@@ -1830,6 +1831,28 @@ function openDetail(id){
 
   var dpScroll=document.getElementById('dp-scroll');
   if(!dpScroll)return;
+
+  // ── Status-Leiste: Dispo / Abrechnung / Zahlung ──────────
+  var ab=(db.abrechnungen||[]).find(function(a){return a.id===t.abId;});
+  var hasDispo=!!(t.dispoDocId||(db.dokumente||[]).find(function(d){return d.terminId===t.id&&d.typ==='dispo'&&d.bestaetigt;}));
+  var hasAbrechn=!!ab;
+  var bezahlt=!!(ab&&ab.bezahlt)||(t.status==='bezahlt');
+  var takesDiff=t.takesDiff&&(t.takesDiff.dispo!==t.takesDiff.abrechn);
+
+  function statusChip(icon, label, sub, color, bg, border, active){
+    return '<div style="flex:1;background:'+(active?bg:'#f5f5f5')+';border:1.5px solid '+(active?border:'#e8e8e8')+';border-radius:10px;padding:8px 6px;text-align:center;opacity:'+(active?'1':'0.4')+'">'
+      +'<div style="font-size:18px;line-height:1">'+icon+'</div>'
+      +'<div style="font-size:10px;font-weight:800;color:'+(active?color:'#aaa')+';margin-top:3px">'+label+'</div>'
+      +(sub&&active?'<div style="font-size:9px;color:'+color+';margin-top:1px;font-weight:600">'+sub+'</div>':'')
+      +'</div>';
+  }
+
+  var statusStrip='<div style="padding:0 16px 12px;display:flex;gap:6px">';
+  statusStrip+=statusChip('📋','Dispo', hasDispo?'✓ vorhanden':'', '#1a6ea8','#e8f4fd','#b3d7f0', hasDispo);
+  statusStrip+=statusChip('💶','Abrechnung', hasAbrechn?(takesDiff?'⚠ '+t.takesDiff.dispo+'→'+t.takesDiff.abrechn+' Takes':fmtEur(ab.auszahlung)):'', hasAbrechn&&takesDiff?'#c2410c':'#c2410c','#fff7ed','#fed7aa', hasAbrechn);
+  statusStrip+=statusChip('✅','Bezahlt', bezahlt&&ab?(fmtEur(ab.auszahlung)):'', '#15803d','#f0fdf4','#86efac', bezahlt);
+  statusStrip+='</div>';
+
   dpScroll.innerHTML=
     '<div class="big-date">'
     +'<div class="bd-studio">'+esc(t.studio||'')+'</div>'
@@ -1841,6 +1864,7 @@ function openDetail(id){
     +(t.uhrzeit?'<div class="bd-time">'+esc(t.uhrzeit)+' Uhr</div>':'')
     +'</div>'
     +'</div>'
+    +statusStrip
     +'<div class="info-card">'
     +'<div class="info-row"><div class="ir-key">Titel</div><div class="ir-val">'+esc(t.titel)+'</div></div>'
     +(t.rolle?'<div class="info-row"><div class="ir-key">Rolle</div><div class="ir-val">'+esc(t.rolle)+'</div></div>':'')
@@ -4156,9 +4180,18 @@ function dokGotFilesFolder(inp){
   var files = Array.from(inp.files);
   if(!files.length) return;
 
-  // Nur Bilder und PDFs, keine Systemdateien
+  // NUR Unterordner "Dispofotos" und "Gagenabrechnungen" — alle anderen ignorieren
+  var ALLOWED_FOLDERS = ['dispofotos', 'gagenabrechnungen'];
   files = files.filter(function(f){
-    return !f.name.startsWith('.') && (f.type.startsWith('image/') || f.type==='application/pdf');
+    var path = (f.webkitRelativePath || f.name).toLowerCase();
+    var parts = path.split('/');
+    // parts[0] = Hauptordner, parts[1] = Unterordner (falls vorhanden)
+    var subfolder = parts.length >= 3 ? parts[1] : (parts.length === 2 ? parts[0] : '');
+    var inAllowedFolder = ALLOWED_FOLDERS.some(function(allowed){
+      return subfolder.indexOf(allowed) >= 0;
+    });
+    // Nur Bilder/PDFs, keine Systemdateien, und nur aus erlaubten Unterordnern
+    return inAllowedFolder && !f.name.startsWith('.') && (f.type.startsWith('image/') || f.type==='application/pdf');
   });
 
   // Kategorie aus Unterordnerpfad erkennen
@@ -4318,6 +4351,16 @@ function dokRefreshAll(){
     return;
   }
   _dokAnalyseQueue(pending, key);
+}
+
+function dokClearEingang(){
+  // Löscht alle NICHT bestätigten Dokumente (Eingang/Fehler-Uploads)
+  var eingang=(db.dokumente||[]).filter(function(d){ return !d.bestaetigt; });
+  if(!eingang.length){ showToast('Eingang ist bereits leer'); return; }
+  if(!confirm(eingang.length+' nicht bestätigte Dokumente löschen?\n(Bestätigte bleiben erhalten)')) return;
+  db.dokumente=(db.dokumente||[]).filter(function(d){ return d.bestaetigt; });
+  save(db); rDokumente();
+  showToast('🗑 '+eingang.length+' Dokumente gelöscht');
 }
 
 function _dokAnalyseQueue(pending, key){
@@ -4534,8 +4577,11 @@ function dokMergeIntoTermin(d, termin){
   // ── Dispo-spezifisch ────────────────────────────────────
   if(d.typ==='dispo'){
     if(!termin.dispoDocId) termin.dispoDocId=d.id;
-    // Takes aus Dispo setzen (wenn Abrechnung noch nicht da)
-    if(d.takes&&!termin.abId) fill('takes', d.takes, 'Takes (aus Dispo)');
+    // Takes aus Dispo nur wenn noch keine Abrechnung vorhanden
+    if(d.takes&&!termin.abId){
+      fill('takes', d.takes, 'Takes (aus Dispo)');
+      termin.dispoTakes=parseInt(d.takes)||0; // Dispo-Takes merken für spätere Differenz-Prüfung
+    }
   }
 
   // ── Abrechnung — alles antizipieren ─────────────────────
@@ -4597,10 +4643,24 @@ function dokMergeIntoTermin(d, termin){
       db.abrechnungen.push(newAb);
       termin.abId=abId;
       termin.status='abrechnung';
-      // Abrechnung hat Vorrang — immer überschreiben
-      if(takes)     overwrite('takes',   takes,    'Takes ('+takes+')');
-      if(takeGage)  overwrite('rate',    takeGage, 'Take-Gage ('+fmtEur(takeGage)+')');
-      if(grundgage) overwrite('kommgage',grundgage,'Komm.-Gage ('+fmtEur(grundgage)+')');
+
+      // ★ TAKES: Abrechnung hat IMMER Vorrang über Dispo ★
+      // Dispo-Takes für Differenz-Vergleich merken
+      if(takes){
+        var dispoTakes=parseInt(termin.dispoTakes)||parseInt(termin.takes)||0;
+        termin.takes=takes; // Abrechnung überschreibt
+        if(dispoTakes && dispoTakes!==takes){
+          termin.takesDiff={dispo:dispoTakes, abrechn:takes};
+          changed.push('⚠ Takes: Dispo='+dispoTakes+' vs. Abrechnung='+takes+' — DIFFERENZ!');
+        } else {
+          termin.takesDiff=null;
+          changed.push('Takes ✓ ('+takes+')');
+        }
+      }
+      // ★ BETRAG: Kernfeld der Abrechnung ★
+      if(takeGage)  termin.rate=takeGage;
+      if(grundgage) termin.kommgage=grundgage;
+
       // USt aus Abrechnung erkennen
       if(newAb.mwst&&netto>0){
         var erkUst=Math.round((newAb.mwst/netto)*100)/100;
@@ -4613,12 +4673,13 @@ function dokMergeIntoTermin(d, termin){
       // Abgleich-Status
       var erwartet=isPausch?auszahlung:(takes*takeGage+grundgage);
       termin.abStatus=Math.abs(auszahlung-erwartet)<1.5?'ok':'differenz';
-      changed.push('Abrechnung angelegt ('+fmtEur(auszahlung)+')');
+      // ★ Auszahlung prominent in changed ★
+      changed.unshift('💶 Auszahlung: '+fmtEur(auszahlung)); // ganz oben
     } else {
       // Update bestehende Abrechnung
-      if(takes&&!existingAb.takes)       { existingAb.takes=takes;    overwrite('takes',takes,'Takes'); }
-      if(takeGage&&!existingAb.take_gage){ existingAb.take_gage=takeGage; overwrite('rate',takeGage,'Take-Gage'); }
-      if(grundgage&&!existingAb.grundgage){ existingAb.grundgage=grundgage; overwrite('kommgage',grundgage,'Komm.-Gage'); }
+      if(takes&&!existingAb.takes)       { existingAb.takes=takes;    termin.takes=takes; changed.push('Takes ('+takes+')'); }
+      if(takeGage&&!existingAb.take_gage){ existingAb.take_gage=takeGage; termin.rate=takeGage; changed.push('Take-Gage'); }
+      if(grundgage&&!existingAb.grundgage){ existingAb.grundgage=grundgage; termin.kommgage=grundgage; changed.push('Komm.-Gage'); }
       if(d.gutschrift_nr&&!existingAb.gutschrift_nr){ existingAb.gutschrift_nr=d.gutschrift_nr; changed.push('Gutschrift-Nr.'); }
     }
   }
@@ -4740,10 +4801,10 @@ function dokOpenDetail(id){
   var d=(db.dokumente||[]).find(function(x){return x.id===id;});
   if(!d) return;
 
-  // States — exakt wie im funktionierenden Stand
+  // States
   var notAnalysed = !d.typ||d.typ==='offen';
-  var awaitConfirm = !notAnalysed && !!d.dataURL;
-  var confirmed   = !notAnalysed && !d.dataURL;
+  var awaitConfirm = !notAnalysed && (!!d.dataURL || !!d._editMode);
+  var confirmed   = !notAnalysed && !d.dataURL && !d._editMode;
 
   // KI-Button zurücksetzen
   var analyseBtn=document.getElementById('dok-detail-analyse-btn');
@@ -4752,10 +4813,11 @@ function dokOpenDetail(id){
   // Title
   document.getElementById('dok-detail-title').textContent=d.beschr||d.dateiname||'Dokument';
 
-  // Foto oben anzeigen wenn vorhanden
+  // Foto oben: nur im notAnalysed-State zeigen (awaitConfirm hat große inline-Vorschau im Body)
   var img=document.getElementById('dok-detail-img');
-  if(d.dataURL && d.mime!=='application/pdf'){
-    img.src=d.dataURL; img.style.display='block';
+  var previewSrc = d.dataURL||(d.mime!=='application/pdf'?d.thumb:null)||null;
+  if(previewSrc && !awaitConfirm){
+    img.src=previewSrc; img.style.display='block';
   } else {
     img.src=''; img.style.display='none';
   }
@@ -4779,6 +4841,18 @@ function dokOpenDetail(id){
 
   // ── STATE: WARTET AUF BESTÄTIGUNG ────────────────────────
   } else if(awaitConfirm){
+    // Große zoombare Vorschau zum Abgleichen — vor den erkannten Daten
+    if(d.dataURL && d.mime!=='application/pdf'){
+      body+='<div style="margin-bottom:12px">'
+        +'<div style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Vorschau zum Abgleichen</div>'
+        +'<div onclick="viewImgFullDok(\''+d.id+'\')" style="cursor:zoom-in;position:relative;border-radius:10px;overflow:hidden;border:1.5px solid #e0e0e0;background:#111">'
+        +'<img src="'+d.dataURL+'" style="width:100%;max-height:380px;object-fit:contain;display:block">'
+        +'<div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px">🔍 Tippen = Vollbild</div>'
+        +'</div>'
+        +'</div>';
+    } else if(d.mime==='application/pdf'){
+      body+='<div style="background:#f5f5f5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#555;text-align:center">📄 '+esc(d.dateiname||'PDF-Dokument')+'</div>';
+    }
     body+='<div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:12px 14px;margin-bottom:12px">'
       +'<div style="font-size:10px;font-weight:800;color:#15803d;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">ERKANNTE DATEN</div>';
     body+=_editRow('beschr','Beschreibung',d.beschr||'');
@@ -4876,7 +4950,12 @@ function dokOpenDetail(id){
   var footer=document.getElementById('dok-footer-confirm');
   if(footer) footer.style.display=awaitConfirm?'block':'none';
   document.getElementById('dok-detail-overlay').style.display='block';
-  document.getElementById('dok-detail-sheet').style.display='flex';
+  var sheet=document.getElementById('dok-detail-sheet');
+  sheet.style.display='flex';
+  sheet.style.flexDirection='column';
+  // Scroll zurück nach oben
+  var sw=document.getElementById('dok-scroll-wrapper');
+  if(sw) sw.scrollTop=0;
 }
 
 
@@ -4997,40 +5076,56 @@ function _showMergeSummary(termin, changed, dok){
   }
 
   // Mit Termin — zeige was übertragen wurde
-  if(changed.length>0){
+  var ab=termin.abId?(db.abrechnungen||[]).find(function(a){return a.id===termin.abId;}):null;
+
+  // ★ Betrag-Box für Abrechnung — immer ganz oben ★
+  if(ab && ab.auszahlung){
+    html+='<div style="background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">'
+      +'<div>'
+      +'<div style="font-size:10px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.6px">💶 Auszahlung</div>'
+      +'<div style="font-size:22px;font-weight:900;color:#c2410c;margin-top:2px">'+fmtEur(ab.auszahlung)+'</div>'
+      +(ab.gutschrift_nr?'<div style="font-size:11px;color:#888;margin-top:1px">Nr. '+esc(ab.gutschrift_nr)+'</div>':'')
+      +'</div>'
+      +'<div style="text-align:right">'
+      +(ab.brutto?'<div style="font-size:11px;color:#888">Brutto '+fmtEur(ab.brutto)+'</div>':'')
+      +(ab.netto?'<div style="font-size:11px;color:#888">Netto '+fmtEur(ab.netto)+'</div>':'')
+      +'</div>'
+      +'</div>';
+  }
+
+  // ★ Takes-Differenz prominent ★
+  if(termin.takesDiff){
+    html+='<div style="background:#fef2f2;border:2px solid #fca5a5;border-radius:12px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="font-size:10px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">⚠ TAKES-DIFFERENZ PRÜFEN</div>'
+      +'<div style="display:flex;gap:8px">'
+      +'<div style="flex:1;background:#fff;border-radius:8px;padding:8px;text-align:center;border:1.5px solid #ddd">'
+      +'<div style="font-size:10px;font-weight:700;color:#888;margin-bottom:2px">📋 DISPO</div>'
+      +'<div style="font-size:24px;font-weight:900;color:#555">'+termin.takesDiff.dispo+'</div>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;font-size:18px;color:#c2410c;font-weight:900">≠</div>'
+      +'<div style="flex:1;background:#fff;border-radius:8px;padding:8px;text-align:center;border:2px solid #c2410c">'
+      +'<div style="font-size:10px;font-weight:700;color:#c2410c;margin-bottom:2px">💶 ABRECHNUNG</div>'
+      +'<div style="font-size:24px;font-weight:900;color:#c2410c">'+termin.takesDiff.abrechn+'</div>'
+      +'</div>'
+      +'</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:8px">Takes der Abrechnung wurden übernommen.</div>'
+      +'</div>';
+  } else if(ab && ab.takes){
+    html+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">'
+      +'<div style="font-size:22px;font-weight:900;color:#15803d">'+ab.takes+'</div>'
+      +'<div><div style="font-size:12px;font-weight:700;color:#15803d">Takes ✓</div><div style="font-size:11px;color:#888">Dispo und Abrechnung stimmen überein</div></div>'
+      +'</div>';
+  }
+
+  if(changed.filter(function(c){return c.indexOf('💶')<0 && c.indexOf('⚠')<0;}).length>0){
     html+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:10px 12px;margin-bottom:12px">';
     html+='<div style="font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">📥 Zum Termin übertragen</div>';
-    changed.forEach(function(c){
-      html+='<div style="font-size:13px;padding:3px 0;border-bottom:1px solid #dcfce7;display:flex;align-items:center;gap:6px">'
+    changed.filter(function(c){return c.indexOf('💶')<0 && c.indexOf('⚠')<0 && c.indexOf('Takes')<0;}).forEach(function(c){
+      html+='<div style="font-size:12px;padding:3px 0;border-bottom:1px solid #dcfce7;display:flex;align-items:center;gap:6px">'
         +'<span style="color:#22c55e;font-size:10px">●</span><span>'+esc(c)+'</span></div>';
     });
     html+='</div>';
-  } else {
-    html+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#15803d">✓ Termin war bereits vollständig – nichts geändert.</div>';
   }
-
-  // Termin-Vorschau
-  html+='<div style="background:#e8f4fd;border:1.5px solid #b3d7f0;border-radius:10px;padding:10px 12px;margin-bottom:14px">';
-  html+='<div style="font-size:10px;font-weight:700;color:#1a6ea8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">📅 Termin jetzt</div>';
-  html+='<div style="font-size:14px;font-weight:800">'+esc(termin.titel||termin.studio||'Termin')+'</div>';
-  if(termin.studio) html+='<div style="font-size:12px;color:#555;margin-top:1px">🏢 '+esc(termin.studio)+'</div>';
-  if(termin.regie)  html+='<div style="font-size:12px;color:#555;margin-top:1px">🎬 '+esc(termin.regie)+'</div>';
-  if(termin.rolle)  html+='<div style="font-size:13px;color:#6d28d9;margin-top:2px;font-weight:700">🎭 '+esc(termin.rolle)+'</div>';
-  if(termin.uhrzeit)html+='<div style="font-size:12px;color:#555;margin-top:1px">⏰ '+esc(termin.uhrzeit)+(termin.bis_uhrzeit?' – '+esc(termin.bis_uhrzeit):'')+' Uhr</div>';
-  if(termin.gvl_staffel||termin.gvl_folge) html+='<div style="font-size:12px;color:#92400e;margin-top:1px">📊 S'+(termin.gvl_staffel||'?')+' E'+(termin.gvl_folge||'?')+'</div>';
-  if(termin.pauschalgage){
-    html+='<div style="font-size:12px;color:#555;margin-top:1px">💶 Pauschal '+fmtEur(termin.pauschalgage)+'</div>';
-  } else if(termin.kommgage||termin.takes){
-    html+='<div style="font-size:12px;color:#555;margin-top:1px">💶 '+(termin.kommgage||0)+'€ KG'+(termin.takes?' + '+(termin.takes)+' Takes × '+(termin.rate||0)+'€':'')+'</div>';
-    var net=termin.pauschalgage||(termin.kommgage||0)+(termin.takes||0)*(termin.rate||0);
-    html+='<div style="font-size:13px;font-weight:800;color:#15803d;margin-top:3px">= '+fmtEur(net)+' netto</div>';
-  }
-  // Takes-Differenz Warnung
-  var ab=termin.abId?(db.abrechnungen||[]).find(function(a){return a.id===termin.abId;}):null;
-  if(ab&&ab.takes&&termin.takes&&parseInt(ab.takes)!==parseInt(termin.takes)){
-    html+='<div style="font-size:11px;background:#fff7ed;border-radius:6px;padding:5px 8px;margin-top:6px;color:#c2410c">⚠ Dispo: '+(termin.takes)+' Takes · Abrechnung: '+ab.takes+' Takes — Differenz prüfen</div>';
-  }
-  html+='</div>';
 
   html+='<button type="button" id="_merge-close-btn" style="width:100%;background:#1a6ea8;color:#fff;border:none;border-radius:12px;padding:13px;text-align:center;font-weight:800;font-size:14px;cursor:pointer;touch-action:manipulation;margin-bottom:8px">Zum Termin →</button>';
   html+='<button type="button" id="_merge-dismiss-btn" style="width:100%;text-align:center;font-size:12px;color:#aaa;cursor:pointer;padding:8px;background:none;border:none;touch-action:manipulation">Schließen</button>';
@@ -5075,6 +5170,10 @@ function viewImgFullDok(dokId){
 }
 
 function dokDetailClose(){
+  if(_dokCurrentId){
+    var d=(db.dokumente||[]).find(function(x){return x.id===_dokCurrentId;});
+    if(d && d._editMode) d._editMode=false;
+  }
   document.getElementById('dok-detail-overlay').style.display='none';
   var sheet=document.getElementById('dok-detail-sheet');
   sheet.style.display='none';
@@ -7174,7 +7273,7 @@ function suchHL(text,q){
 <!-- ══════ DOK DETAIL SHEET ══════════════════════════════════ -->
 <div id="dok-detail-overlay" onclick="dokDetailClose()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500"></div>
 <div id="dok-detail-sheet" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:502;background:#fff;border-radius:20px 20px 0 0;max-height:92vh;flex-direction:column;overflow:hidden;padding-bottom:env(safe-area-inset-bottom)">
-  <div style="overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;flex:1">
+  <div id="dok-scroll-wrapper" style="overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;flex:1">
   <div style="padding:16px 16px 0">
     <div style="width:40px;height:4px;background:#e0e0e0;border-radius:2px;margin:0 auto 14px"></div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
