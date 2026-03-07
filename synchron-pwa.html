@@ -4740,9 +4740,10 @@ function dokOpenDetail(id){
   var d=(db.dokumente||[]).find(function(x){return x.id===id;});
   if(!d) return;
 
+  // States — exakt wie im funktionierenden Stand
   var notAnalysed = !d.typ||d.typ==='offen';
-  var awaitConfirm = !notAnalysed && (!!d.dataURL || !!d._editMode);
-  var confirmed   = !notAnalysed && !d.dataURL && !d._editMode;
+  var awaitConfirm = !notAnalysed && !!d.dataURL;
+  var confirmed   = !notAnalysed && !d.dataURL;
 
   // KI-Button zurücksetzen
   var analyseBtn=document.getElementById('dok-detail-analyse-btn');
@@ -4751,17 +4752,15 @@ function dokOpenDetail(id){
   // Title
   document.getElementById('dok-detail-title').textContent=d.beschr||d.dateiname||'Dokument';
 
-  // Preview image: show when doc has a dataURL
+  // Foto oben anzeigen wenn vorhanden
   var img=document.getElementById('dok-detail-img');
   if(d.dataURL && d.mime!=='application/pdf'){
-    img.src=d.dataURL;
-    img.style.display='block';
+    img.src=d.dataURL; img.style.display='block';
   } else {
-    img.src='';
-    img.style.display='none';
+    img.src=''; img.style.display='none';
   }
 
-  // Category chips
+  // Kategorie-Chips
   var katColors={dispo:'#1a6ea8',abrechn:'#c2410c',ausgabe:'#15803d',sonstig:'#555'};
   ['dispo','abrechn','ausgabe','sonstig'].forEach(function(k){
     var el=document.getElementById('dokkat-'+k);
@@ -4775,19 +4774,13 @@ function dokOpenDetail(id){
 
   // ── STATE: NICHT ANALYSIERT ──────────────────────────────
   if(notAnalysed){
-    // Foto (wird oben im #dok-detail-img gezeigt)
-    body+='<div style="background:#f5f5f5;border-radius:12px;padding:14px;text-align:center;margin-bottom:14px">'
-      +'<div style="font-size:12px;color:#888;margin-bottom:12px">Tippe auf KI-Analyse, um alle Daten auszulesen</div>'
-      +'<button type="button" onclick="dokAnalyseOne()" style="width:100%;background:#1a6ea8;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:16px;cursor:pointer;touch-action:manipulation">🔍 KI-Analyse starten</button>'
-      +'</div>';
+    body+='<div style="font-size:12px;color:#888;text-align:center;padding:8px 0 12px">Tippe auf „🔍 KI analysieren" um alle Daten auszulesen</div>';
     if(d.mime==='application/pdf') body+='<div style="text-align:center;padding:10px;background:#f5f5f5;border-radius:8px;color:#555;font-size:13px;margin-bottom:12px">📄 '+esc(d.dateiname||'PDF')+'</div>';
 
   // ── STATE: WARTET AUF BESTÄTIGUNG ────────────────────────
   } else if(awaitConfirm){
-    // Erkannte Daten — grüne Box wie im Referenz-Design
     body+='<div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:12px 14px;margin-bottom:12px">'
       +'<div style="font-size:10px;font-weight:800;color:#15803d;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">ERKANNTE DATEN</div>';
-
     body+=_editRow('beschr','Beschreibung',d.beschr||'');
     body+=_editRow('datum','Datum',d.datum||'');
     body+=_editRow('studio','Studio',d.studio||'');
@@ -4817,155 +4810,75 @@ function dokOpenDetail(id){
     }
     body+='</div>';
 
-    // ── ABGLEICH: Kalender + Dispo (nur bei Abrechnung) ─────
+    // Termin-Abgleich (nur Abrechnung)
     if(d.typ==='abrechn' && (d.datum||d.studio)){
-      // Termin-Match
-      var matchTermin = d.terminId
-        ? (db.termine||[]).find(function(x){return x.id===d.terminId;})
-        : null;
-      var matchGrund = '';
+      var matchTermin=d.terminId?(db.termine||[]).find(function(x){return x.id===d.terminId;}):null;
+      var matchGrund='';
       if(!matchTermin){
-        var mg=dokFindTerminMitGrund(d.datum, d.studio, d.uhrzeit||null);
+        var mg=dokFindTerminMitGrund(d.datum,d.studio,d.uhrzeit||null);
         if(mg){ matchTermin=mg.termin; matchGrund=mg.grund; if(!d.terminId) d.terminId=matchTermin.id; }
-      } else {
-        var mg2=dokFindTerminMitGrund(d.datum, d.studio, d.uhrzeit||null);
-        matchGrund=mg2?mg2.grund:'manuell verknüpft';
       }
-      // Dispo-Match: bestätigtes Dispo-Dokument mit gleichem Studio+Datum
-      var matchDispo = (db.dokumente||[]).find(function(dok){
-        if(dok.typ!=='dispo'||!!dok.dataURL) return false; // nur bestätigte Dispos
-        if(!dok.datum||!dok.studio) return false;
-        var studioOk = dok.studio.toLowerCase().indexOf((d.studio||'').toLowerCase())>=0
-          || (d.studio||'').toLowerCase().indexOf(dok.studio.toLowerCase())>=0;
-        var diffD = d.datum ? Math.abs(new Date(dok.datum)-new Date(d.datum))/(1000*60*60*24) : 999;
-        return studioOk && diffD<=3;
-      });
-
-      // Render Abgleich-Karte
-      body+='<div style="background:#f0f9ff;border:2px solid #38bdf8;border-radius:12px;padding:12px 14px;margin-bottom:12px">';
-      body+='<div style="font-size:10px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">🔗 Automatischer Abgleich</div>';
-
+      body+='<div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px">';
       if(matchTermin){
-        body+='<div style="margin-bottom:8px">'
-          +'<div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:3px">📅 KALENDER-TERMIN</div>'
-          +'<div style="background:#fff;border-radius:8px;padding:8px 10px;border:1px solid #bae6fd">'
-          +'<div style="font-size:13px;font-weight:800">'+esc(matchTermin.titel||matchTermin.studio||'Termin')+'</div>'
-          +'<div style="font-size:11px;color:#888;margin-top:1px">'+fd(matchTermin.datum)+(matchTermin.studio?' · '+esc(matchTermin.studio):'')+'</div>'
-          +(matchTermin.kommgage||matchTermin.takes?'<div style="font-size:11px;color:#0369a1;margin-top:3px;font-weight:600">Gage: '+(matchTermin.kommgage||0)+'€ KG + '+(matchTermin.takes||0)+' Takes</div>':'')
-          +'<div style="font-size:10px;color:#94a3b8;margin-top:4px;border-top:1px solid #f0f9ff;padding-top:4px">Sortiert weil: '+matchGrund+'</div>'
-          +'</div></div>';
+        var diff=d.auszahlung&&matchTermin.kommgage?(d.auszahlung-matchTermin.kommgage):null;
+        body+='<div style="font-weight:700;color:'+(diff&&diff!==0?'#c2410c':'#15803d')+'">Termin gefunden'+(diff&&diff!==0?' - Differenz!':' ✓')+'</div>';
+        body+='<div style="color:#333;margin-top:2px">'+esc(matchTermin.titel||matchTermin.studio||'')+(matchTermin.datum?' · '+fd(matchTermin.datum):'')+'</div>';
+        if(diff!==null) body+='<div style="color:#888;font-size:11px;margin-top:2px">Erwartet: '+fmtEur(matchTermin.kommgage||0)+' | Abgerechnet: '+fmtEur(d.auszahlung||0)+' | Diff: '+fmtEur(diff)+'</div>';
       } else {
-        body+='<div style="background:#fff7ed;border-radius:8px;padding:8px 10px;border:1px solid #fed7aa;margin-bottom:8px;font-size:12px;color:#c2410c">⚠ Kein Kalender-Termin gefunden'+(d.datum?' für '+fd(d.datum):'')+(d.studio?' · '+esc(d.studio):'')+'</div>';
+        body+='<div style="color:#c2410c;font-weight:700">⚠ Kein Termin gefunden</div>';
       }
-
-      if(matchDispo){
-        body+='<div style="margin-bottom:4px">'
-          +'<div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:3px">📋 DISPO-DOKUMENT</div>'
-          +'<div style="background:#fff;border-radius:8px;padding:8px 10px;border:1px solid #bae6fd">'
-          +'<div style="font-size:13px;font-weight:800">'+esc(matchDispo.beschr||matchDispo.dateiname||'Dispo')+'</div>'
-          +'<div style="font-size:11px;color:#888;margin-top:1px">'+fd(matchDispo.datum)+(matchDispo.studio?' · '+esc(matchDispo.studio):'')+(matchDispo.regie?' · Regie: '+esc(matchDispo.regie):'')+'</div>'
-          +(matchDispo.rolle?'<div style="font-size:11px;color:#0369a1;font-weight:600;margin-top:2px">🎭 '+esc(matchDispo.rolle)+'</div>':'')
-          +'<div style="font-size:10px;color:#94a3b8;margin-top:4px;border-top:1px solid #f0f9ff;padding-top:4px">Bestätigtes Dispo gefunden · Studio+Datum stimmt überein</div>'
-          +'</div></div>';
-      } else {
-        body+='<div style="font-size:11px;color:#94a3b8;padding:4px 2px">📋 Kein bestätigtes Dispo-Dokument gefunden</div>';
-      }
-
       body+='</div>';
-
     } else if(termin){
-      // Nicht-Abrechnung: einfacher Termin-Vorschlag
       body+='<div style="background:#e8f4fd;border:1.5px solid #b3d7f0;border-radius:10px;padding:10px 12px;margin-bottom:10px">'
-        +'<div style="font-size:10px;font-weight:700;color:#1a6ea8;margin-bottom:3px;text-transform:uppercase">Vorgeschlagener Termin</div>'
+        +'<div style="font-size:10px;font-weight:700;color:#1a6ea8;margin-bottom:3px">Vorgeschlagener Termin</div>'
         +'<div style="font-size:13px;font-weight:800">'+esc(termin.titel||termin.studio||'')+'</div>'
         +'<div style="font-size:11px;color:#888">'+fd(termin.datum)+(termin.studio?' · '+esc(termin.studio):'')+'</div>'
         +'</div>';
     }
 
-    // PDF inline (Bilder werden oben im Sheet-Header angezeigt)
-    if(d.dataURL && d.mime==='application/pdf'){
-      body+='<div style="margin-bottom:12px">'
-        +'<div style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">📄 PDF-Vorschau</div>'
-        +'<div style="border-radius:10px;overflow:hidden;border:1.5px solid #e5e7eb;background:#f5f5f5">'
-        +'<iframe src="'+d.dataURL+'" style="width:100%;height:400px;border:none;display:block" scrolling="yes"></iframe>'
-        +'</div>'
-        +'</div>';
-    }
-
-    // BIG CONFIRM BUTTON — wird als statischer Footer angezeigt, nicht per innerHTML
-    // (iOS Safari-Fix: onclick auf dynamisch injizierte Buttons in overflow-y:auto funktioniert nicht)
-
   // ── STATE: BESTÄTIGT ──────────────────────────────────────
   } else {
-    // Confirmed - show thumbnail + data
-    body+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;font-weight:600;color:#15803d">✓ Bestätigt</div>';
-    if(d.thumb){
-      body+='<div style="text-align:center;margin-bottom:10px"><img src="'+d.thumb+'" onclick="window.open(this.src)" style="max-width:100%;max-height:160px;border-radius:10px;border:1.5px solid #e0e0e0;cursor:zoom-in;object-fit:contain" /></div>';
-    }
-
-    // Meta chips
+    body+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600;color:#15803d">✓ Bestätigt</div>';
     var chips=[];
     if(d.datum) chips.push('📅 '+fd(d.datum));
     if(d.studio) chips.push('🏢 '+esc(d.studio));
-    if(d.regie) chips.push('🎬 '+esc(d.regie));
     if(d.uhrzeit) chips.push('⏰ '+esc(d.uhrzeit)+(d.bis_uhrzeit?' – '+esc(d.bis_uhrzeit):''));
-    if(d.takes)   chips.push('🎬 '+d.takes+' Takes');
+    if(d.takes) chips.push('🎬 '+d.takes+' Takes');
     if(d.rolle) chips.push('🎭 '+esc(d.rolle));
-    // GVL-Daten
-    if(d.gvl_staffel||d.gvl_folge||d.gvl_takes){
-      var gvlStr='📊 GVL';
-      if(d.gvl_staffel) gvlStr+=' · S'+esc(d.gvl_staffel);
-      if(d.gvl_folge)   gvlStr+=' E'+esc(d.gvl_folge);
-      if(d.gvl_takes)   gvlStr+=' · '+d.gvl_takes+' Takes';
-      chips.push(gvlStr);
-    } else if(d.episode){
-      chips.push('📺 '+esc(d.episode));
-    }
+    if(d.gvl_staffel||d.gvl_folge) chips.push('📊 S'+esc(d.gvl_staffel||'?')+' F'+esc(d.gvl_folge||'?'));
     if(chips.length){
       body+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">';
       chips.forEach(function(ch){ body+='<div style="background:#f5f5f5;border-radius:8px;padding:4px 9px;font-size:11px;font-weight:600">'+ch+'</div>'; });
       body+='</div>';
     }
-
-    // Abrechnung data
-    if(d.typ==='abrechn'&&(d.brutto||d.takes)){
+    if(d.typ==='abrechn'&&d.auszahlung){
       body+='<div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:10px 12px;margin-bottom:10px">';
-      body+='<div style="font-size:10px;font-weight:700;color:#c2410c;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">💶 Abrechnungsdaten</div>';
+      body+='<div style="font-size:10px;font-weight:700;color:#c2410c;text-transform:uppercase;margin-bottom:6px">💶 Abrechnung</div>';
       if(d.gutschrift_nr) body+=_dataRow('Gutschrift-Nr.',esc(d.gutschrift_nr));
-      if(d.takes)         body+=_dataRow('Takes',d.takes);
-      if(d.take_gage)     body+=_dataRow('Take-Gage',fmtEur(d.take_gage));
-      if(d.grundgage)     body+=_dataRow('Grundgage',fmtEur(d.grundgage));
-      if(d.brutto)        body+=_dataRow('Brutto',fmtEur(d.brutto));
-      if(d.auszahlung)    body+=_dataRow('Auszahlung','<strong style="color:#c2410c">'+fmtEur(d.auszahlung)+'</strong>');
+      if(d.brutto)      body+=_dataRow('Brutto',fmtEur(d.brutto));
+      if(d.auszahlung)  body+=_dataRow('Auszahlung','<strong style="color:#c2410c">'+fmtEur(d.auszahlung)+'</strong>');
       body+='</div>';
     }
-
-    // Verknüpfter Termin
     if(termin){
       body+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:10px 12px;margin-bottom:10px">'
-        +'<div style="display:flex;align-items:center;gap:8px">'
-        +'<div style="flex:1">'
-        +'<div style="font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;margin-bottom:2px">✓ Verknüpfter Termin</div>'
+        +'<div style="font-size:10px;font-weight:700;color:#15803d;margin-bottom:2px">✓ Verknüpfter Termin</div>'
         +'<div style="font-size:13px;font-weight:800">'+esc(termin.titel||termin.studio||'')+'</div>'
-        +'<div style="font-size:11px;color:#888">'+fd(termin.datum)+(termin.studio?' · '+esc(termin.studio):'')+'</div>'
-        +'</div>'
-        +'<button type="button" onclick="dokDetailClose();openDetail(\''+termin.id+'\')" style="background:#15803d;color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;touch-action:manipulation">→ Termin</button>'
-        +'<button type="button" onclick="dokUnlink()" style="background:#fef2f2;border:1px solid #fca5a5;color:#c2410c;padding:6px 8px;border-radius:8px;font-size:11px;cursor:pointer;touch-action:manipulation">✕</button>'
-        +'</div></div>';
+        +'<div style="font-size:11px;color:#888">'+fd(termin.datum)+'</div>'
+        +'<button type="button" onclick="dokDetailClose();openDetail(\''+termin.id+'\')" style="margin-top:6px;background:#15803d;color:#fff;border:none;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;touch-action:manipulation">→ Termin öffnen</button>'
+        +'</div>';
     } else {
       body+='<div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#c2410c;font-weight:600">⚠ Noch kein Termin verknüpft</div>';
     }
   }
 
   document.getElementById('dok-detail-body').innerHTML=body;
-  // Footer: nur Bestätigen-Footer — KI-Button ist im scrollbaren Bereich
+  // Footer: Bestätigen nur bei awaitConfirm
   var footer=document.getElementById('dok-footer-confirm');
   if(footer) footer.style.display=awaitConfirm?'block':'none';
   document.getElementById('dok-detail-overlay').style.display='block';
-  var sheet=document.getElementById('dok-detail-sheet');
-  sheet.style.display='flex';
-  sheet.style.flexDirection='column';
+  document.getElementById('dok-detail-sheet').style.display='flex';
 }
+
 
 // Helper: editable input row for confirm step
 function _editRow(field, label, val){
@@ -5163,7 +5076,9 @@ function viewImgFullDok(dokId){
 
 function dokDetailClose(){
   document.getElementById('dok-detail-overlay').style.display='none';
-  document.getElementById('dok-detail-sheet').style.display='none';
+  var sheet=document.getElementById('dok-detail-sheet');
+  sheet.style.display='none';
+  sheet.style.flexDirection='';
   _dokCurrentId=null;
 }
 
@@ -7267,7 +7182,7 @@ function suchHL(text,q){
       <button type="button" onclick="dokDetailClose()" style="font-size:24px;color:#ccc;line-height:1;background:none;border:none;padding:4px 8px;cursor:pointer;touch-action:manipulation">×</button>
     </div>
   </div>
-  <img id="dok-detail-img" style="display:none;width:100%;max-height:240px;object-fit:contain;background:#111;border-top:1px solid #eee;border-bottom:1px solid #eee">
+  <img id="dok-detail-img" style="display:none;width:100%;max-height:220px;object-fit:contain;background:#111;border-top:1px solid #eee;border-bottom:1px solid #eee">
   <div style="padding:12px 16px">
     <div style="margin-bottom:12px">
       <div style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Kategorie</div>
@@ -7288,14 +7203,15 @@ function suchHL(text,q){
         <span>📅</span><div style="flex:1;text-align:left"><div style="font-size:12px;font-weight:700;color:#333">Manuell wählen</div></div>
       </button>
     </div>
-    <div style="display:flex;justify-content:flex-end;padding-bottom:4px">
-      <button type="button" id="dok-detail-analyse-btn" onclick="dokDeleteOne()" style="background:#fff0f6;border:1.5px solid #fbcfe8;color:#be185d;padding:9px 14px;border-radius:10px;font-weight:700;cursor:pointer;touch-action:manipulation;font-size:13px">🗑 Löschen</button>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button type="button" id="dok-detail-analyse-btn" onclick="dokAnalyseOne()" style="flex:1;background:#be185d;color:#fff;padding:11px;border-radius:10px;text-align:center;font-weight:700;font-size:13px;cursor:pointer;border:none;touch-action:manipulation">🔍 KI analysieren</button>
+      <button type="button" onclick="dokDeleteOne()" style="background:#fff0f6;border:1.5px solid #fbcfe8;color:#be185d;padding:11px 14px;border-radius:10px;font-weight:700;cursor:pointer;touch-action:manipulation">🗑</button>
     </div>
-    </div>
+  </div>
   </div><!-- end scroll wrapper -->
-  <!-- STATISCHER BESTÄTIGEN-FOOTER — ausserhalb scroll, immer tappbar auf iOS -->
+  <!-- STATISCHE FOOTER-BUTTONS — ausserhalb scroll, immer tappbar auf iOS -->
   <div id="dok-footer-confirm" style="display:none;padding:0 16px 12px;background:#fff;border-top:1px solid #f0f0f0;flex-shrink:0">
-    <button type="button" id="dok-confirm-btn" onclick="dokBestaetigen()" style="width:100%;background:#15803d;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:8px;touch-action:manipulation;display:block">✓ Speichern & zuordnen</button>
+    <button type="button" id="dok-confirm-btn" onclick="dokBestaetigen()" style="width:100%;background:#15803d;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:8px;touch-action:manipulation;display:block">✓ Bestätigen & Foto löschen</button>
     <button type="button" id="dok-ablehnen-btn" onclick="dokAblehnen()" style="width:100%;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:10px;font-weight:700;font-size:13px;cursor:pointer;color:#c2410c;touch-action:manipulation;display:block">✗ Daten falsch – neu analysieren</button>
   </div>
 </div>
