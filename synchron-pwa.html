@@ -674,12 +674,6 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
         <div style="font-size:11px;font-weight:800;color:var(--ink)">Belege</div>
         <div style="font-size:9px;color:var(--ink4)">Dispos · Abrechnungen</div>
       </button>
-      <!-- KI analysieren -->
-      <button type="button" onclick="dokRefreshAll()" style="flex:1;background:var(--cream2);border:2px solid var(--border);border-radius:12px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;box-shadow:0 3px 0 var(--border)">
-        <div style="font-size:22px">🔍</div>
-        <div style="font-size:11px;font-weight:800;color:var(--ink)">KI analysieren</div>
-        <div style="font-size:9px;color:var(--ink4)">Alle offenen Dok.</div>
-      </button>
     </div>
     <div id="ics-import-status" style="display:none;margin-top:8px;background:var(--green2);border:1px solid var(--green);border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;color:var(--green)"></div>
   </div>
@@ -4951,7 +4945,9 @@ function dokOpenDetail(id){
   if(footerConfirm) footerConfirm.style.display=awaitConfirm?'block':'none';
   if(footerAnalyse) footerAnalyse.style.display=confirmed?'none':'block';
   document.getElementById('dok-detail-overlay').style.display='block';
-  document.getElementById('dok-detail-sheet').style.display='flex';
+  var sheet=document.getElementById('dok-detail-sheet');
+  sheet.style.display='flex';
+  sheet.style.flexDirection='column';
 }
 
 // Helper: editable input row for confirm step
