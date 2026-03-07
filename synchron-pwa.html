@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 08:45</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 09:05</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -4740,16 +4740,17 @@ function dokOpenDetail(id){
   var d=(db.dokumente||[]).find(function(x){return x.id===id;});
   if(!d) return;
 
-  // Analyse-Button immer zurücksetzen beim Öffnen
-  var analyseBtn=document.getElementById('dok-detail-analyse-btn');
-  if(analyseBtn){
-    var btnLabel=(d&&d.dataURL)?'🔍 KI analysieren':(d&&d.bestaetigt)?'✏ Daten bearbeiten':'🔍 KI analysieren';
-    analyseBtn.textContent=btnLabel; analyseBtn.style.opacity='1'; analyseBtn.style.pointerEvents=''; 
-  }
-
   var notAnalysed = !d.typ||d.typ==='offen';
   var awaitConfirm = !notAnalysed && (!!d.dataURL || !!d._editMode);
   var confirmed   = !notAnalysed && !d.dataURL && !d._editMode;
+
+  // Analyse-Button zurücksetzen (label je nach State)
+  var analyseBtn=document.getElementById('dok-detail-analyse-btn');
+  if(analyseBtn){
+    analyseBtn.textContent=confirmed?'✏ Daten bearbeiten':'🔍 KI analysieren';
+    analyseBtn.style.opacity='1';
+    analyseBtn.style.pointerEvents='';
+  }
 
   // Title
   document.getElementById('dok-detail-title').textContent=d.beschr||d.dateiname||'Dokument';
@@ -4781,8 +4782,7 @@ function dokOpenDetail(id){
     body+='<div style="background:#f5f5f5;border-radius:12px;padding:16px;text-align:center;margin-bottom:12px">'
       +'<div style="font-size:32px;margin-bottom:8px">📎</div>'
       +'<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+esc(d.dateiname||'Dokument')+'</div>'
-      +'<div style="font-size:12px;color:#888;margin-bottom:12px">Noch nicht analysiert – KI liest alle Daten aus</div>'
-      +'<div onclick="dokAnalyseOne()" style="background:#be185d;color:#fff;border-radius:10px;padding:12px 20px;font-weight:800;font-size:14px;cursor:pointer;display:inline-block;touch-action:manipulation">🔍 Jetzt KI analysieren</div>'
+      +'<div style="font-size:12px;color:#888">Noch nicht analysiert – unten auf KI analysieren tippen</div>'
       +'</div>';
     if(d.mime==='application/pdf') body+='<div style="text-align:center;padding:12px;background:#f5f5f5;border-radius:8px;color:#555;font-size:13px;margin-bottom:12px">📄 '+esc(d.dateiname||'PDF')+'</div>';
 
@@ -4968,12 +4968,11 @@ function dokOpenDetail(id){
   }
 
   document.getElementById('dok-detail-body').innerHTML=body;
-  // Footer ein/ausblenden
+  // Footer ein/ausblenden — je nach State NUR die passenden Buttons
   var footerConfirm=document.getElementById('dok-footer-confirm');
   var footerAnalyse=document.getElementById('dok-footer-analyse');
+  if(footerAnalyse) footerAnalyse.style.display=(notAnalysed||confirmed)?'block':'none';
   if(footerConfirm) footerConfirm.style.display=awaitConfirm?'block':'none';
-  // KI-Button immer zeigen
-  if(footerAnalyse) footerAnalyse.style.display='block';
   document.getElementById('dok-detail-overlay').style.display='block';
   var sheet=document.getElementById('dok-detail-sheet');
   sheet.style.display='flex';
