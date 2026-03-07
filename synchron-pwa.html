@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 07:55</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 08:15</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -1590,11 +1590,10 @@ function save(d){
     if(e.name==='QuotaExceededError'||e.code===22){
       var stripped=JSON.parse(JSON.stringify(d));
       (stripped.dokumente||[]).forEach(function(dok){
-        // Keep dataURL only for unconfirmed docs needing KI analysis
-        var isConfirmed=dok.typ&&dok.typ!=='offen'&&!dok.dataURL;
-        if(!isConfirmed && dok.dataURL && dok.dataURL.length>50000){
-          // Already confirmed or has thumb - strip full image
-          if(dok.typ&&dok.typ!=='offen') dok.dataURL=null;
+        // Only strip dataURL from CONFIRMED docs (bestaetigt=true)
+        // Never strip from unconfirmed docs - KI still needs them
+        if(dok.bestaetigt && dok.dataURL){
+          dok.dataURL=null;
         }
       });
       try{
@@ -1603,9 +1602,9 @@ function save(d){
         Object.assign(d,stripped);
       }catch(e2){
         showToast('⚠ Speicher voll – älteste Belegfotos werden gelöscht');
-        // Last resort: remove dataURLs from all confirmed docs
+        // Last resort: remove dataURLs only from confirmed docs
         (d.dokumente||[]).forEach(function(dok){
-          if(dok.typ&&dok.typ!=='offen'&&dok.dataURL) dok.dataURL=null;
+          if(dok.bestaetigt&&dok.dataURL) dok.dataURL=null;
         });
         try{localStorage.setItem(DBK,JSON.stringify(d));}catch(e3){}
       }
@@ -4245,7 +4244,7 @@ function _dokImportFilesWithKat(files, katFn){
       var id='dok'+Date.now()+Math.random().toString(36).slice(2,6);
       db.dokumente.push({
         id:id, dateiname:file.name||'Dokument', mime:file.type||'image/jpeg',
-        dataURL:e.target.result, typ:katFn(file),
+        dataURL:e.target.result, typ:null, typHint:katFn(file),
         addedAt:new Date().toISOString(),
         beschr:null, datum:null, studio:null, terminId:null, ausgabeId:null
       });
@@ -4280,14 +4279,9 @@ function _dokImportFiles(files, skipDuplicates){
     var reader = new FileReader();
     reader.onload = function(e){
       var id='dok'+Date.now()+Math.random().toString(36).slice(2,6);
-      var nameL=file.name.toLowerCase();
-      var vortyp = nameL.indexOf('dispo')>=0||nameL.indexOf('dispatch')>=0 ? 'dispo'
-        : nameL.indexOf('abrechn')>=0||nameL.indexOf('gutschrift')>=0 ? 'abrechn'
-        : nameL.indexOf('rechnung')>=0||nameL.indexOf('quittung')>=0||nameL.indexOf('beleg')>=0 ? 'ausgabe'
-        : null;
       db.dokumente.push({
         id:id, dateiname:file.name||'Dokument', mime:file.type||'image/jpeg',
-        dataURL:e.target.result, typ:vortyp,
+        dataURL:e.target.result, typ:null,
         addedAt:new Date().toISOString(),
         beschr:null, datum:null, studio:null, terminId:null, ausgabeId:null
       });
