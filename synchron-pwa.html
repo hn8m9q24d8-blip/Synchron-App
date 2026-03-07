@@ -368,7 +368,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <div class="header-left">
       <div class="header-title">Termine</div>
       <div class="header-sub" id="termine-sub"></div>
-      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 07:22</div>
+      <div style="font-size:9px;color:var(--ink4);margin-top:1px">v2026-03-07 07:55</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="kal-folder-input" type="file" accept="image/*,application/pdf" multiple webkitdirectory style="display:none" onchange="dokGotFilesFolder(this)">
@@ -4748,11 +4748,14 @@ function dokOpenDetail(id){
 
   // Analyse-Button immer zurücksetzen beim Öffnen
   var analyseBtn=document.getElementById('dok-detail-analyse-btn');
-  if(analyseBtn){ analyseBtn.textContent='🔍 KI analysieren'; analyseBtn.style.opacity='1'; analyseBtn.style.pointerEvents=''; }
+  if(analyseBtn){
+    var btnLabel=(d&&d.dataURL)?'🔍 KI analysieren':(d&&d.bestaetigt)?'✏ Daten bearbeiten':'🔍 KI analysieren';
+    analyseBtn.textContent=btnLabel; analyseBtn.style.opacity='1'; analyseBtn.style.pointerEvents=''; 
+  }
 
   var notAnalysed = !d.typ||d.typ==='offen';
-  var awaitConfirm = !notAnalysed && !!d.dataURL;
-  var confirmed   = !notAnalysed && !d.dataURL;
+  var awaitConfirm = !notAnalysed && (!!d.dataURL || !!d._editMode);
+  var confirmed   = !notAnalysed && !d.dataURL && !d._editMode;
 
   // Title
   document.getElementById('dok-detail-title').textContent=d.beschr||d.dateiname||'Dokument';
@@ -4912,8 +4915,11 @@ function dokOpenDetail(id){
 
   // ── STATE: BESTÄTIGT ──────────────────────────────────────
   } else {
-    // Confirmed - show data only, no photo
-    body+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;font-weight:600;color:#15803d">✓ Bestätigt · Foto aus App gelöscht</div>';
+    // Confirmed - show thumbnail + data
+    body+='<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;font-weight:600;color:#15803d">✓ Bestätigt</div>';
+    if(d.thumb){
+      body+='<div style="text-align:center;margin-bottom:10px"><img src="'+d.thumb+'" onclick="window.open(this.src)" style="max-width:100%;max-height:160px;border-radius:10px;border:1.5px solid #e0e0e0;cursor:zoom-in;object-fit:contain" /></div>';
+    }
 
     // Meta chips
     var chips=[];
@@ -4974,8 +4980,8 @@ function dokOpenDetail(id){
   var footerConfirm=document.getElementById('dok-footer-confirm');
   var footerAnalyse=document.getElementById('dok-footer-analyse');
   if(footerConfirm) footerConfirm.style.display=awaitConfirm?'block':'none';
-  // KI-Button immer zeigen (ausser wenn bestaetigt und kein Bild)
-  if(footerAnalyse) footerAnalyse.style.display=(confirmed&&!d.dataURL)?'none':'block';
+  // KI-Button immer zeigen
+  if(footerAnalyse) footerAnalyse.style.display='block';
   document.getElementById('dok-detail-overlay').style.display='block';
   var sheet=document.getElementById('dok-detail-sheet');
   sheet.style.display='flex';
@@ -5053,7 +5059,10 @@ function dokBestaetigen(){
     d.ausgabeId=agId;
   }
 
-  // ★ FOTO LÖSCHEN ★
+  // ★ FOTO → THUMBNAIL (klein speichern, Original löschen) ★
+  if(d.dataURL && !d.thumb){
+    makeThumbnail(d.dataURL, function(thumb){ d.thumb=thumb; save(db); });
+  }
   d.dataURL=null;
   d.bestaetigt=true;
   save(db);
@@ -5249,10 +5258,19 @@ function dokLinkToTermin(terminId){
   showToast('✓ Termin verknüpft: '+esc((t&&(t.titel||t.studio))||''));
 }
 
+function dokBearbeitenModus(){
+  var d=(db.dokumente||[]).find(function(x){return x.id===_dokCurrentId;});
+  if(!d) return;
+  // Set back to awaitConfirm state so edit fields appear
+  // Keep bestaetigt flag but re-inject a placeholder dataURL flag
+  d._editMode=true;
+  dokOpenDetail(d.id);
+}
+
 function dokAnalyseOne(){
   var d=(db.dokumente||[]).find(function(x){return x.id===_dokCurrentId;});
   if(!d) return;
-  if(!d.dataURL){ showToast('Kein Foto mehr in der App – Daten sind bereits gespeichert'); return; }
+  if(!d.dataURL && d.bestaetigt){ dokBearbeitenModus(); return; }
   var key=(db.profil&&db.profil.apiKey)||getKey()||null;
   if(!key){ showToast('Kein API-Key'); return; }
 
